@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CheckIcon, PlusIcon, TrashIcon } from "@/components/Icons";
 import { addDays, formatMD } from "@/lib/date";
@@ -57,7 +56,6 @@ export default function ShoppingClient({
   frequentItems: string[];
   todayStr: string;
 }) {
-  const router = useRouter();
   const supabase = createClient();
   const [newItemName, setNewItemName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -71,7 +69,7 @@ export default function ShoppingClient({
   const [endSlot, setEndSlot] = useState<Slot>("夜");
 
   const [previewPlans, setPreviewPlans] = useState<PreviewPlan[] | null>(null);
-  const [excludeSeasoning, setExcludeSeasoning] = useState(false);
+  const [excludeSeasoning, setExcludeSeasoning] = useState(true);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const checkedCount = items.filter((i) => i.is_checked).length;
 
@@ -336,16 +334,38 @@ export default function ShoppingClient({
       newRows.push({ shopping_list_id: id, ...c, source: "auto_from_recipe" as const });
     }
 
+    let insertedItems: ItemRow[] = [];
     if (newRows.length > 0) {
-      await supabase.from("shopping_items").insert(newRows);
+      const { data: inserted } = await supabase.from("shopping_items").insert(newRows).select();
+      if (inserted) {
+        insertedItems = inserted.map((d) => ({
+          id: d.id,
+          name: d.name,
+          amount: d.amount,
+          unit: d.unit,
+          is_checked: d.is_checked,
+          category_id: d.category_id,
+          shopping_categories: categories.find((c) => c.id === d.category_id)
+            ? { name: categories.find((c) => c.id === d.category_id)!.name }
+            : null,
+        }));
+      }
     }
     for (const u of updates) {
       await supabase.from("shopping_items").update({ amount: u.amount }).eq("id", u.id);
     }
 
+    // 画面へ即座に反映(ページ遷移を待たずに買い物リストへ表示する)
+    setItems((prev) => {
+      const withUpdates = prev.map((it) => {
+        const u = updates.find((x) => x.id === it.id);
+        return u ? { ...it, amount: u.amount } : it;
+      });
+      return [...withUpdates, ...insertedItems];
+    });
+
     setBusy(false);
     setPreviewPlans(null);
-    router.refresh();
   }
 
   const grouped = groupByCategory(items);
