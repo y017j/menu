@@ -29,7 +29,11 @@ export default async function CalendarPage({
 
   const [{ data: mealPlans }, { data: daySettings }, { data: recipes }, { data: eatOutOptions }] =
     await Promise.all([
-      supabase.from("meal_plans").select("*").gte("date", startStr).lte("date", endStr),
+      supabase
+        .from("meal_plans")
+        .select("*, meal_plan_items(*)")
+        .gte("date", startStr)
+        .lte("date", endStr),
       supabase.from("day_settings").select("*").gte("date", startStr).lte("date", endStr),
       supabase.from("recipes").select("id, name, category").order("name"),
       supabase.from("eat_out_options").select("id, name, genre").order("name"),

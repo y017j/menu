@@ -38,6 +38,7 @@ export default async function EditRecipePage({
             id: i.id,
             name: i.name,
             quantityText: i.quantity_text ?? "",
+            groupName: i.group_name ?? "",
             ingredient_type: i.ingredient_type,
             is_optional: i.is_optional,
           })),

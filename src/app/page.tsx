@@ -11,7 +11,7 @@ export default async function HomePage() {
 
   const { data: plans } = await supabase
     .from("meal_plans")
-    .select("*, recipes(name, category), eat_out_options(name)")
+    .select("*, meal_plan_items(*, recipes(name, category), eat_out_options(name))")
     .eq("date", todayStr);
 
   const { data: shoppingItems } = await supabase
@@ -21,7 +21,13 @@ export default async function HomePage() {
     .eq("is_checked", false);
 
   const totalKcal = (plans ?? []).reduce(
-    (sum, p) => sum + (p.nutrition_snapshot?.calories_kcal ?? 0),
+    (sum, p) =>
+      sum +
+      p.meal_plan_items.reduce(
+        (s: number, it: { nutrition_snapshot: { calories_kcal: number | null } | null }) =>
+          s + (it.nutrition_snapshot?.calories_kcal ?? 0),
+        0
+      ),
     0
   );
 
@@ -49,28 +55,47 @@ export default async function HomePage() {
       <div className="flex flex-col gap-2.5">
         {["朝", "昼", "夜"].map((slot) => {
           const plan = plans?.find((p) => p.meal_slot === slot);
-          const label = plan
-            ? plan.content_type === "recipe"
-              ? plan.recipes?.name
-              : plan.content_type === "eat_out"
-              ? plan.eat_out_options?.name
-              : plan.free_text_label
-            : null;
+          const items = plan?.meal_plan_items ?? [];
+          const slotKcal = items.reduce(
+            (s: number, it: { nutrition_snapshot: { calories_kcal: number | null } | null }) =>
+              s + (it.nutrition_snapshot?.calories_kcal ?? 0),
+            0
+          );
+          const firstCategory = items.find(
+            (it: { recipes: { category: string | null } | null }) => it.recipes?.category
+          )?.recipes?.category as string | undefined;
+
           return (
             <div key={slot} className="sticker sticker-sm p-2.5 flex items-center gap-3">
               <div className="w-14 h-14 rounded-2xl border-2 border-ink flex items-center justify-center flex-shrink-0 bg-mint-soft">
-                <FoodIcon type={plan?.recipes?.category ?? ""} className="w-6.5 h-6.5" />
+                <FoodIcon type={firstCategory ?? ""} className="w-6.5 h-6.5" />
               </div>
               <div>
                 <span className="font-display font-bold text-[10px] text-white bg-ink rounded-lg px-1.5 py-0.5">
                   {slot}
                 </span>
-                <div className="font-display font-bold text-sm mt-0.5">
-                  {label ?? <span className="text-ink/40 font-normal">まだ予定がありません</span>}
-                </div>
-                {plan?.nutrition_snapshot?.calories_kcal && (
-                  <div className="text-xs text-ink/50">約{plan.nutrition_snapshot.calories_kcal} kcal</div>
+                {items.length > 0 ? (
+                  <div className="font-display font-bold text-sm mt-0.5">
+                    {items
+                      .map(
+                        (it: {
+                          content_type: string;
+                          recipes: { name: string } | null;
+                          eat_out_options: { name: string } | null;
+                          free_text_label: string | null;
+                        }) =>
+                          it.content_type === "recipe"
+                            ? it.recipes?.name
+                            : it.content_type === "eat_out"
+                            ? it.eat_out_options?.name
+                            : it.free_text_label
+                      )
+                      .join("・")}
+                  </div>
+                ) : (
+                  <div className="font-normal text-sm mt-0.5 text-ink/40">まだ予定がありません</div>
                 )}
+                {slotKcal > 0 && <div className="text-xs text-ink/50">約{slotKcal} kcal</div>}
               </div>
             </div>
           );

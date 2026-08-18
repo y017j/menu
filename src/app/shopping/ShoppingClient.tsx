@@ -143,37 +143,39 @@ export default function ShoppingClient({
       });
   }
 
-  // ■O 前半: 指定期間の対象になる献立一覧を取得してプレビュー表示する
+  // ■O 前半: 指定期間の対象になる献立(品目単位)一覧を取得してプレビュー表示する
   async function loadPreview() {
     setBusy(true);
     const { data: plansRaw } = await supabase
       .from("meal_plans")
-      .select("id, recipe_id, servings, date, meal_slot, recipes(name)")
-      .eq("content_type", "recipe")
+      .select("date, meal_slot, meal_plan_items(id, content_type, recipe_id, servings, recipes(name))")
       .gte("date", startDate)
       .lte("date", endDate)
-      .not("recipe_id", "is", null)
       .order("date")
       .order("meal_slot");
 
-    const filtered = (plansRaw ?? []).filter((p) => {
+    // meal_plan(日付+食事枠)の境界フィルタをかけた上で、中身をrecipeの品目単位に展開する
+    const previewRows: PreviewPlan[] = [];
+    for (const p of plansRaw ?? []) {
       const slotOrder = SLOT_ORDER[p.meal_slot as Slot];
-      if (p.date === startDate && slotOrder < SLOT_ORDER[startSlot]) return false;
-      if (p.date === endDate && slotOrder > SLOT_ORDER[endSlot]) return false;
-      return true;
-    });
+      if (p.date === startDate && slotOrder < SLOT_ORDER[startSlot]) continue;
+      if (p.date === endDate && slotOrder > SLOT_ORDER[endSlot]) continue;
 
-    setPreviewPlans(
-      filtered.map((p) => ({
-        id: p.id,
-        date: p.date,
-        meal_slot: p.meal_slot as Slot,
-        recipe_id: p.recipe_id!,
-        recipe_name: extractRecipeName(p.recipes),
-        servings: p.servings,
-        included: true,
-      }))
-    );
+      for (const item of p.meal_plan_items) {
+        if (item.content_type !== "recipe" || !item.recipe_id) continue;
+        previewRows.push({
+          id: item.id,
+          date: p.date,
+          meal_slot: p.meal_slot as Slot,
+          recipe_id: item.recipe_id,
+          recipe_name: extractRecipeName(item.recipes),
+          servings: item.servings,
+          included: true,
+        });
+      }
+    }
+
+    setPreviewPlans(previewRows);
     setBusy(false);
   }
 

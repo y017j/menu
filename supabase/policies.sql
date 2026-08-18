@@ -58,6 +58,20 @@ CREATE POLICY "via meal_record" ON meal_photos FOR ALL USING (
   EXISTS (SELECT 1 FROM meal_records m WHERE m.id = meal_photos.meal_record_id AND m.user_id = auth.uid())
 );
 
+ALTER TABLE meal_plan_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "via meal_plan" ON meal_plan_items FOR ALL USING (
+  EXISTS (SELECT 1 FROM meal_plans p WHERE p.id = meal_plan_items.meal_plan_id AND p.user_id = auth.uid())
+) WITH CHECK (
+  EXISTS (SELECT 1 FROM meal_plans p WHERE p.id = meal_plan_items.meal_plan_id AND p.user_id = auth.uid())
+);
+
+ALTER TABLE meal_record_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "via meal_record" ON meal_record_items FOR ALL USING (
+  EXISTS (SELECT 1 FROM meal_records m WHERE m.id = meal_record_items.meal_record_id AND m.user_id = auth.uid())
+) WITH CHECK (
+  EXISTS (SELECT 1 FROM meal_records m WHERE m.id = meal_record_items.meal_record_id AND m.user_id = auth.uid())
+);
+
 ALTER TABLE shopping_items ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "via shopping_list" ON shopping_items FOR ALL USING (
   EXISTS (SELECT 1 FROM shopping_lists l WHERE l.id = shopping_items.shopping_list_id AND l.user_id = auth.uid())

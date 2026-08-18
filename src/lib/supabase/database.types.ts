@@ -49,6 +49,7 @@ export interface Database {
           recipe_id: string;
           name: string;
           quantity_text: string | null;
+          group_name: string | null;
           is_optional: boolean;
           ingredient_type: IngredientType;
           sort_order: number;
@@ -94,12 +95,6 @@ export interface Database {
           user_id: string;
           date: string;
           meal_slot: MealSlot;
-          content_type: ContentType;
-          recipe_id: string | null;
-          eat_out_option_id: string | null;
-          free_text_label: string | null;
-          servings: number | null;
-          nutrition_snapshot: NutritionSnapshot | null;
           source: "manual" | "ai_generated";
           ai_plan_history_id: string | null;
           created_at: string;
@@ -108,9 +103,26 @@ export interface Database {
         Insert: Partial<Database["public"]["Tables"]["meal_plans"]["Row"]> & {
           user_id: string;
           date: string;
-          content_type: ContentType;
         };
         Update: Partial<Database["public"]["Tables"]["meal_plans"]["Row"]>;
+      };
+      meal_plan_items: {
+        Row: {
+          id: string;
+          meal_plan_id: string;
+          content_type: ContentType;
+          recipe_id: string | null;
+          eat_out_option_id: string | null;
+          free_text_label: string | null;
+          servings: number | null;
+          nutrition_snapshot: NutritionSnapshot | null;
+          sort_order: number;
+        };
+        Insert: Partial<Database["public"]["Tables"]["meal_plan_items"]["Row"]> & {
+          meal_plan_id: string;
+          content_type: ContentType;
+        };
+        Update: Partial<Database["public"]["Tables"]["meal_plan_items"]["Row"]>;
       };
       meal_records: {
         Row: {
@@ -119,20 +131,31 @@ export interface Database {
           meal_plan_id: string | null;
           date: string;
           meal_slot: MealSlot;
-          content_type: ContentType;
-          recipe_id: string | null;
-          eat_out_option_id: string | null;
-          free_text_label: string | null;
-          nutrition_snapshot: NutritionSnapshot | null;
           comment: string | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["meal_records"]["Row"]> & {
           user_id: string;
           date: string;
-          content_type: ContentType;
         };
         Update: Partial<Database["public"]["Tables"]["meal_records"]["Row"]>;
+      };
+      meal_record_items: {
+        Row: {
+          id: string;
+          meal_record_id: string;
+          content_type: ContentType;
+          recipe_id: string | null;
+          eat_out_option_id: string | null;
+          free_text_label: string | null;
+          nutrition_snapshot: NutritionSnapshot | null;
+          sort_order: number;
+        };
+        Insert: Partial<Database["public"]["Tables"]["meal_record_items"]["Row"]> & {
+          meal_record_id: string;
+          content_type: ContentType;
+        };
+        Update: Partial<Database["public"]["Tables"]["meal_record_items"]["Row"]>;
       };
       meal_photos: {
         Row: {

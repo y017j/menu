@@ -7,6 +7,7 @@ const MODEL = "claude-haiku-4-5-20251001";
 interface Ingredient {
   name: string;
   quantityText: string | null;
+  groupName?: string | null;
 }
 
 export async function POST(req: NextRequest) {
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   };
 
   const ingredientLines = ingredients
-    .map((i) => `- ${i.name} ${i.quantityText ?? ""}`.trim())
+    .map((i) => `- ${i.groupName ? `[${i.groupName}] ` : ""}${i.name} ${i.quantityText ?? ""}`.trim())
     .join("\n");
 
   const prompt = `あなたは栄養士です。以下の料理について、1人前あたりの推定カロリー・栄養情報を計算してください。

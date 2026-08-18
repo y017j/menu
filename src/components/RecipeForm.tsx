@@ -10,6 +10,7 @@ export interface IngredientRow {
   id?: string;
   name: string;
   quantityText: string;
+  groupName: string;
   ingredient_type: IngredientType;
   is_optional: boolean;
 }
@@ -17,6 +18,7 @@ export interface IngredientRow {
 const emptyRow = (): IngredientRow => ({
   name: "",
   quantityText: "",
+  groupName: "",
   ingredient_type: "食材",
   is_optional: false,
 });
@@ -78,6 +80,7 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
         ingredients: validIngredients.map((r) => ({
           name: r.name,
           quantityText: r.quantityText || null,
+          groupName: r.groupName || null,
         })),
       }),
     });
@@ -154,6 +157,7 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
           recipe_id: targetId!,
           name: r.name,
           quantity_text: r.quantityText || null,
+          group_name: r.groupName || null,
           ingredient_type: r.ingredient_type,
           is_optional: r.is_optional,
           sort_order: idx,
@@ -248,10 +252,19 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
       </div>
 
       <div className="sticker p-4">
-        <div className="font-display font-bold text-sm mb-2">材料</div>
+        <div className="font-display font-bold text-sm mb-1">材料</div>
+        <p className="text-[11px] text-ink/50 mb-2">
+          「メイン」「ソース」のように部位を分けたい場合は、グループ名を入力してください(任意)
+        </p>
         <div className="flex flex-col gap-2">
           {ingredients.map((row, i) => (
             <div key={i} className="flex gap-1.5 items-center">
+              <input
+                placeholder="グループ(任意)"
+                value={row.groupName}
+                onChange={(e) => updateIngredient(i, { groupName: e.target.value })}
+                className="input w-[84px] text-xs"
+              />
               <input
                 placeholder="食材名"
                 value={row.name}
@@ -262,7 +275,7 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
                 placeholder="量(例: 300g, 1枚, 少々)"
                 value={row.quantityText}
                 onChange={(e) => updateIngredient(i, { quantityText: e.target.value })}
-                className="input w-[120px]"
+                className="input w-[110px]"
               />
               <select
                 value={row.ingredient_type}

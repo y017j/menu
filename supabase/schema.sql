@@ -76,6 +76,7 @@ CREATE TABLE recipe_ingredients (
   recipe_id       UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
   name            VARCHAR(100) NOT NULL,
   quantity_text   VARCHAR(50),               -- 自由入力(例: "300g", "1枚", "大さじ2", "少々")
+  group_name      VARCHAR(50),               -- 部位・グループ(例: "メイン", "ソース"。未分類はNULL)
   is_optional     BOOLEAN NOT NULL DEFAULT false,
   ingredient_type VARCHAR(10) NOT NULL DEFAULT '食材' CHECK (ingredient_type IN ('食材','調味料')),
   sort_order      INT NOT NULL DEFAULT 0
@@ -160,13 +161,27 @@ CREATE INDEX idx_ai_plan_history_user ON ai_plan_history(user_id, created_at DES
 -- D/E. カレンダー本体（予定・実績）
 -- ------------------------------------------------------------
 
--- 予定(MealPlan)。1日×食事枠(朝/昼/夜)ごとに1行。
--- content_typeにより recipe / eat_out / free_text のいずれかを表現する。
+-- 予定(MealPlan)。1日×食事枠(朝/昼/夜)ごとに1行。「その食事枠の器」を表す。
+-- 中身(レシピ/外食/自由入力)は複数登録できるため meal_plan_items に分離している(例: からあげ+サラダ)。
 CREATE TABLE meal_plans (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date                DATE NOT NULL,
   meal_slot           VARCHAR(20) NOT NULL DEFAULT '夜', -- '朝'/'昼'/'夜'/将来的に'間食'等
+  source              VARCHAR(20) NOT NULL DEFAULT 'manual'
+                      CHECK (source IN ('manual','ai_generated')), -- 手動登録かAI提案由来か
+  ai_plan_history_id  UUID REFERENCES ai_plan_history(id) ON DELETE SET NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, date, meal_slot)
+);
+CREATE INDEX idx_meal_plans_user_date ON meal_plans(user_id, date);
+
+-- 予定の中身(1件以上)。content_typeにより recipe / eat_out / free_text のいずれかを表現する。
+-- 例: 8/18の夜 → [からあげ(recipe), サラダ(recipe)] の2件
+CREATE TABLE meal_plan_items (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  meal_plan_id        UUID NOT NULL REFERENCES meal_plans(id) ON DELETE CASCADE,
   content_type        VARCHAR(20) NOT NULL CHECK (content_type IN ('recipe','eat_out','free_text')),
   recipe_id           UUID REFERENCES recipes(id) ON DELETE SET NULL,
   eat_out_option_id   UUID REFERENCES eat_out_options(id) ON DELETE SET NULL,
@@ -174,43 +189,46 @@ CREATE TABLE meal_plans (
   servings            INT,                   -- 人数調整後の想定人数(■5)
   -- 登録時点の栄養情報スナップショット(■9, ■C)。レシピ編集後も値は変わらない
   nutrition_snapshot  JSONB,                 -- {"calories_kcal":650,"protein_g":30,"fat_g":20,"carbs_g":45}
-  source              VARCHAR(20) NOT NULL DEFAULT 'manual'
-                      CHECK (source IN ('manual','ai_generated')), -- 手動登録かAI提案由来か
-  ai_plan_history_id  UUID REFERENCES ai_plan_history(id) ON DELETE SET NULL,
-  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (
-    (content_type = 'recipe'    AND recipe_id IS NOT NULL) OR
-    (content_type = 'eat_out'   AND eat_out_option_id IS NOT NULL) OR
-    (content_type = 'free_text' AND free_text_label IS NOT NULL)
-  ),
-  UNIQUE (user_id, date, meal_slot)
-);
-CREATE INDEX idx_meal_plans_user_date ON meal_plans(user_id, date);
-CREATE INDEX idx_meal_plans_recipe ON meal_plans(recipe_id);
-
--- 実績(MealRecord)。「思い出」記録。meal_planと紐づく場合も、紐づかない場合もある。
-CREATE TABLE meal_records (
-  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  meal_plan_id        UUID REFERENCES meal_plans(id) ON DELETE SET NULL, -- 予定通り作った場合に紐付け
-  date                DATE NOT NULL,
-  meal_slot           VARCHAR(20) NOT NULL DEFAULT '夜',
-  content_type        VARCHAR(20) NOT NULL CHECK (content_type IN ('recipe','eat_out','free_text')),
-  recipe_id           UUID REFERENCES recipes(id) ON DELETE SET NULL,
-  eat_out_option_id   UUID REFERENCES eat_out_options(id) ON DELETE SET NULL,
-  free_text_label     VARCHAR(150),
-  nutrition_snapshot  JSONB,                 -- 登録時点の栄養情報(■9)
-  comment             TEXT,                  -- 一言コメント(■E, v1.1で評価廃止)
-  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sort_order          INT NOT NULL DEFAULT 0,
   CHECK (
     (content_type = 'recipe'    AND recipe_id IS NOT NULL) OR
     (content_type = 'eat_out'   AND eat_out_option_id IS NOT NULL) OR
     (content_type = 'free_text' AND free_text_label IS NOT NULL)
   )
 );
+CREATE INDEX idx_meal_plan_items_plan ON meal_plan_items(meal_plan_id);
+CREATE INDEX idx_meal_plan_items_recipe ON meal_plan_items(recipe_id);
+
+-- 実績(MealRecord)。「思い出」記録の器。meal_planと紐づく場合も、紐づかない場合もある。
+CREATE TABLE meal_records (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  meal_plan_id        UUID REFERENCES meal_plans(id) ON DELETE SET NULL, -- 予定通り作った場合に紐付け
+  date                DATE NOT NULL,
+  meal_slot           VARCHAR(20) NOT NULL DEFAULT '夜',
+  comment             TEXT,                  -- 一言コメント(■E, v1.1で評価廃止)
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE INDEX idx_meal_records_user_date ON meal_records(user_id, date);
-CREATE INDEX idx_meal_records_recipe ON meal_records(recipe_id);
+
+-- 実績の中身(1件以上)。meal_plan_itemsと同じ構造。
+CREATE TABLE meal_record_items (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  meal_record_id      UUID NOT NULL REFERENCES meal_records(id) ON DELETE CASCADE,
+  content_type        VARCHAR(20) NOT NULL CHECK (content_type IN ('recipe','eat_out','free_text')),
+  recipe_id           UUID REFERENCES recipes(id) ON DELETE SET NULL,
+  eat_out_option_id   UUID REFERENCES eat_out_options(id) ON DELETE SET NULL,
+  free_text_label     VARCHAR(150),
+  nutrition_snapshot  JSONB,                 -- 登録時点の栄養情報(■9)
+  sort_order          INT NOT NULL DEFAULT 0,
+  CHECK (
+    (content_type = 'recipe'    AND recipe_id IS NOT NULL) OR
+    (content_type = 'eat_out'   AND eat_out_option_id IS NOT NULL) OR
+    (content_type = 'free_text' AND free_text_label IS NOT NULL)
+  )
+);
+CREATE INDEX idx_meal_record_items_record ON meal_record_items(meal_record_id);
+CREATE INDEX idx_meal_record_items_recipe ON meal_record_items(recipe_id);
 
 -- 実績に紐づく写真（1実績に複数枚可）
 CREATE TABLE meal_photos (

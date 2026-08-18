@@ -27,8 +27,17 @@ export default async function RecipeDetailPage({
     .eq("recipe_id", id)
     .maybeSingle();
 
-  const shokuzai = ingredients?.filter((i) => i.ingredient_type === "食材") ?? [];
-  const chomiryo = ingredients?.filter((i) => i.ingredient_type === "調味料") ?? [];
+  // グループ名(部位)ごとにまとめる。グループ未指定のものは最後に「その他」としてまとめる
+  const groupOrder: string[] = [];
+  const groupedIngredients = new Map<string, typeof ingredients>();
+  for (const ing of ingredients ?? []) {
+    const key = ing.group_name ?? "";
+    if (!groupedIngredients.has(key)) {
+      groupOrder.push(key);
+      groupedIngredients.set(key, []);
+    }
+    groupedIngredients.get(key)!.push(ing);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -77,29 +86,30 @@ export default async function RecipeDetailPage({
         <div className="font-display font-bold text-sm mb-2">
           材料({recipe.base_servings}人分)
         </div>
-        {shokuzai.length > 0 && (
-          <ul className="text-sm flex flex-col gap-1 mb-2">
-            {shokuzai.map((i) => (
-              <li key={i.id} className="flex justify-between border-b border-dashed border-ink/20 pb-1">
-                <span>{i.name}{i.is_optional && <span className="text-ink/40 text-xs ml-1">(任意)</span>}</span>
-                <span className="text-ink/70">{i.quantity_text ?? ""}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {chomiryo.length > 0 && (
-          <>
-            <div className="font-display font-bold text-xs text-ink/60 mt-2 mb-1">調味料</div>
-            <ul className="text-sm flex flex-col gap-1">
-              {chomiryo.map((i) => (
-                <li key={i.id} className="flex justify-between border-b border-dashed border-ink/20 pb-1">
-                  <span>{i.name}</span>
-                  <span className="text-ink/70">{i.quantity_text ?? ""}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+        {groupOrder.map((groupKey) => {
+          const rows = groupedIngredients.get(groupKey)!;
+          return (
+            <div key={groupKey || "__ungrouped"} className="mb-3 last:mb-0">
+              {groupKey && (
+                <div className="font-display font-bold text-xs text-coral mb-1">{groupKey}</div>
+              )}
+              <ul className="text-sm flex flex-col gap-1">
+                {rows.map((i) => (
+                  <li key={i.id} className="flex justify-between border-b border-dashed border-ink/20 pb-1">
+                    <span>
+                      {i.name}
+                      {i.ingredient_type === "調味料" && (
+                        <span className="text-ink/40 text-xs ml-1">(調味料)</span>
+                      )}
+                      {i.is_optional && <span className="text-ink/40 text-xs ml-1">(任意)</span>}
+                    </span>
+                    <span className="text-ink/70">{i.quantity_text ?? ""}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
       </div>
 
       {recipe.instructions && (
