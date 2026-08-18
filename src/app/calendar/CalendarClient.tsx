@@ -381,8 +381,16 @@ function PlanEditModal({
   }
 
   async function handleSave() {
-    setSaving(true);
     setSaveError(null);
+
+    if (items.length === 0) {
+      setSaveError(
+        "料理が1つもリストに追加されていません。上の「＋ このリストに追加」ボタンを押してから保存してください。"
+      );
+      return;
+    }
+
+    setSaving(true);
 
     // 1. meal_plans本体をupsert(なければ作成)
     const { data: mealPlan, error: planError } = await supabase

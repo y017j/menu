@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CheckIcon, PlusIcon } from "@/components/Icons";
+import { CheckIcon, PlusIcon, TrashIcon } from "@/components/Icons";
 import { addDays, formatMD } from "@/lib/date";
 import { parseQuantity } from "@/lib/quantity";
 
@@ -71,6 +71,8 @@ export default function ShoppingClient({
   const [endSlot, setEndSlot] = useState<Slot>("夜");
 
   const [previewPlans, setPreviewPlans] = useState<PreviewPlan[] | null>(null);
+  const [excludeSeasoning, setExcludeSeasoning] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const checkedCount = items.filter((i) => i.is_checked).length;
 
   async function ensureListId(): Promise<string> {
@@ -85,7 +87,15 @@ export default function ShoppingClient({
 
   async function addItem(name: string, categoryName?: string) {
     if (!name.trim()) return;
+    const trimmedName = name.trim();
     const category = categories.find((c) => c.name === (categoryName ?? "食材"));
+
+    // 同じ名前の項目が既にあれば、新しく追加せずそちらを使う(名前の統合)
+    const existing = items.find((it) => it.name === trimmedName);
+    if (existing) {
+      setNewItemName("");
+      return;
+    }
 
     // 楽観的に画面へ即反映(仮IDで先に表示し、保存後に本物のデータへ差し替える)
     const tempId = `temp-${tempIdCounter.current++}`;
@@ -93,7 +103,7 @@ export default function ShoppingClient({
       ...prev,
       {
         id: tempId,
-        name: name.trim(),
+        name: trimmedName,
         amount: null,
         unit: null,
         is_checked: false,
@@ -108,7 +118,7 @@ export default function ShoppingClient({
       .from("shopping_items")
       .insert({
         shopping_list_id: id,
-        name: name.trim(),
+        name: trimmedName,
         category_id: category?.id ?? null,
         source: "manual",
       })
@@ -117,6 +127,24 @@ export default function ShoppingClient({
 
     if (inserted) {
       setItems((prev) => prev.map((it) => (it.id === tempId ? { ...it, id: inserted.id } : it)));
+    }
+  }
+
+  async function deleteItem(item: ItemRow) {
+    setItems((prev) => prev.filter((it) => it.id !== item.id));
+    supabase.from("shopping_items").delete().eq("id", item.id);
+  }
+
+  async function clearAllItems() {
+    if (!confirmClearAll) {
+      setConfirmClearAll(true);
+      return;
+    }
+    const ids = items.map((it) => it.id);
+    setItems([]);
+    setConfirmClearAll(false);
+    if (ids.length > 0) {
+      await supabase.from("shopping_items").delete().in("id", ids);
     }
   }
 
@@ -207,10 +235,12 @@ export default function ShoppingClient({
       .select("recipe_id, name, quantity_text, ingredient_type")
       .in("recipe_id", recipeIds);
 
-    // パースできた量(数値+単位)は name+単位 をキーに合算する
+    // 食材: パースできた量(数値+単位)は name+単位 をキーに合算する
     const numericTotals = new Map<string, { amount: number; unit: string; type: string }>();
-    // パースできない量("少々"等)はそのまま個別の買い物項目として並べる(合算しない)
+    // 食材でパースできない量("少々"等)はそのまま個別の買い物項目として並べる(合算しない)
     const textOnlyRows: { name: string; quantityText: string; type: string }[] = [];
+    // 調味料: 量は表示せず、名前だけを重複なく集める
+    const seasoningNames = new Set<string>();
 
     for (const plan of targetPlans) {
       const recipe = recipesData?.find((r) => r.id === plan.recipe_id);
@@ -220,6 +250,11 @@ export default function ShoppingClient({
 
       const ings = ingredientsData?.filter((i) => i.recipe_id === plan.recipe_id) ?? [];
       for (const ing of ings) {
+        if (ing.ingredient_type === "調味料") {
+          if (excludeSeasoning) continue; // 調味料を除外する設定の場合はスキップ
+          seasoningNames.add(ing.name);
+          continue;
+        }
         const parsed = parseQuantity(ing.quantity_text);
         if (parsed) {
           const key = `${ing.name}_${parsed.unit}`;
@@ -230,11 +265,7 @@ export default function ShoppingClient({
             type: ing.ingredient_type,
           });
         } else if (ing.quantity_text) {
-          textOnlyRows.push({
-            name: ing.name,
-            quantityText: ing.quantity_text,
-            type: ing.ingredient_type,
-          });
+          textOnlyRows.push({ name: ing.name, quantityText: ing.quantity_text, type: ing.ingredient_type });
         } else {
           textOnlyRows.push({ name: ing.name, quantityText: "", type: ing.ingredient_type });
         }
@@ -249,30 +280,69 @@ export default function ShoppingClient({
     const numericRows = [...numericTotals.entries()].map(([key, v]) => {
       const name = key.slice(0, key.length - v.unit.length - 1);
       const roundedAmount = Math.round(v.amount * 100) / 100;
-      return {
-        shopping_list_id: id,
-        name,
-        amount: roundedAmount || null,
-        unit: v.unit || null,
-        category_id: categoryIdFor(v.type),
-        source: "auto_from_recipe" as const,
-      };
+      return { name, amount: roundedAmount || null, unit: v.unit || null, category_id: categoryIdFor(v.type) };
     });
 
     const textRows = textOnlyRows.map((t) => ({
-      shopping_list_id: id,
       name: t.quantityText ? `${t.name}(${t.quantityText})` : t.name,
-      amount: null,
-      unit: null,
+      amount: null as number | null,
+      unit: null as string | null,
       category_id: categoryIdFor(t.type),
-      source: "auto_from_recipe" as const,
     }));
 
-    const rows = [...numericRows, ...textRows];
+    // 調味料は量を表示せず、名前だけの項目として追加
+    const seasoningRows = [...seasoningNames].map((name) => ({
+      name,
+      amount: null as number | null,
+      unit: null as string | null,
+      category_id: chomiryoCat?.id ?? null,
+    }));
 
-    if (rows.length > 0) {
-      await supabase.from("shopping_items").insert(rows);
+    const candidates = [...numericRows, ...textRows, ...seasoningRows];
+
+    // 既存の買い物リスト項目と名前が一致するものは、新規追加せず既存の方へ数量を合算する(名前の統合)
+    const newRows: {
+      shopping_list_id: string;
+      name: string;
+      amount: number | null;
+      unit: string | null;
+      category_id: string | null;
+      source: "auto_from_recipe";
+    }[] = [];
+    const updates: { id: string; amount: number }[] = [];
+    const seenNames = new Map<string, number>(); // このバッチ内での重複防止
+
+    for (const c of candidates) {
+      if (seenNames.has(c.name)) {
+        // 同じ集計内で同名が複数出た場合、数値同士なら合算
+        const idx = seenNames.get(c.name)!;
+        const prev = newRows[idx];
+        if (prev && prev.amount != null && c.amount != null && prev.unit === c.unit) {
+          prev.amount = Math.round((prev.amount + c.amount) * 100) / 100;
+        }
+        continue;
+      }
+
+      const existing = items.find((it) => it.name === c.name);
+      if (existing) {
+        if (existing.amount != null && c.amount != null && existing.unit === c.unit) {
+          updates.push({ id: existing.id, amount: Math.round((existing.amount + c.amount) * 100) / 100 });
+        }
+        // 名前が一致し数値合算できない場合(単位違い・テキストのみ等)は、重複を避けるため追加しない
+        continue;
+      }
+
+      seenNames.set(c.name, newRows.length);
+      newRows.push({ shopping_list_id: id, ...c, source: "auto_from_recipe" as const });
     }
+
+    if (newRows.length > 0) {
+      await supabase.from("shopping_items").insert(newRows);
+    }
+    for (const u of updates) {
+      await supabase.from("shopping_items").update({ amount: u.amount }).eq("id", u.id);
+    }
+
     setBusy(false);
     setPreviewPlans(null);
     router.refresh();
@@ -284,9 +354,21 @@ export default function ShoppingClient({
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="font-display font-black text-xl">買い物リスト</h1>
-        <span className="text-xs font-display font-bold px-3 py-1 bg-mint-soft border-2 border-ink rounded-2xl">
-          {checkedCount}/{items.length} 完了
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-display font-bold px-3 py-1 bg-mint-soft border-2 border-ink rounded-2xl">
+            {checkedCount}/{items.length} 完了
+          </span>
+          {items.length > 0 && (
+            <button
+              onClick={clearAllItems}
+              className={`text-xs font-display font-bold px-3 py-1 rounded-2xl border-2 border-ink ${
+                confirmClearAll ? "bg-[#c0392b] text-white" : "bg-white text-ink/60"
+              }`}
+            >
+              {confirmClearAll ? "本当に全部削除" : "全部削除"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="sticker sticker-sm p-3 mb-4">
@@ -328,6 +410,15 @@ export default function ShoppingClient({
             ))}
           </select>
         </div>
+        <label className="flex items-center gap-2 mt-2.5 text-xs font-display font-bold">
+          <input
+            type="checkbox"
+            checked={excludeSeasoning}
+            onChange={(e) => setExcludeSeasoning(e.target.checked)}
+            className="w-4 h-4"
+          />
+          自動集計で調味料を除外する
+        </label>
       </div>
 
       <button
@@ -362,10 +453,16 @@ export default function ShoppingClient({
               >
                 {item.is_checked && <CheckIcon className="w-3.5 h-3.5" />}
               </button>
-              <span className={item.is_checked ? "line-through opacity-50 text-sm" : "text-sm"}>
+              <span className={`flex-1 ${item.is_checked ? "line-through opacity-50 text-sm" : "text-sm"}`}>
                 {item.name}
                 {item.amount ? ` ${item.amount}${item.unit ?? ""}` : ""}
               </span>
+              <button
+                onClick={() => deleteItem(item)}
+                className="w-5 h-5 flex-shrink-0 text-ink/30"
+              >
+                <TrashIcon className="w-full h-full" />
+              </button>
             </div>
           ))}
         </div>
