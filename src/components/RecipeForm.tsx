@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { PlusIcon, TrashIcon } from "@/components/Icons";
 import type { IngredientType } from "@/lib/supabase/database.types";
 
+// フラットな材料一覧(DB保存形式・編集ページから渡ってくる形式)
 export interface IngredientRow {
   id?: string;
   name: string;
@@ -15,13 +16,51 @@ export interface IngredientRow {
   is_optional: boolean;
 }
 
-const emptyRow = (): IngredientRow => ({
+// フォーム内部では「グループごとの材料リスト」として扱う
+interface IngredientDraft {
+  name: string;
+  quantityText: string;
+  ingredient_type: IngredientType;
+  is_optional: boolean;
+}
+interface GroupDraft {
+  key: string;
+  name: string; // "" = グループ未指定(見出しなし)
+  ingredients: IngredientDraft[];
+}
+
+const emptyIngredient = (): IngredientDraft => ({
   name: "",
   quantityText: "",
-  groupName: "",
   ingredient_type: "食材",
   is_optional: false,
 });
+
+// フラットな材料一覧 → グループ単位の配列へ変換(編集画面の初期値読み込み用)
+function buildGroupsFromFlat(flat: IngredientRow[]): GroupDraft[] {
+  const toDraft = (r: IngredientRow): IngredientDraft => ({
+    name: r.name,
+    quantityText: r.quantityText,
+    ingredient_type: r.ingredient_type,
+    is_optional: r.is_optional,
+  });
+
+  const ungrouped = flat.filter((r) => !r.groupName).map(toDraft);
+  const groups: GroupDraft[] = [
+    { key: "ungrouped", name: "", ingredients: ungrouped.length > 0 ? ungrouped : [emptyIngredient()] },
+  ];
+
+  const namedGroupNames = [...new Set(flat.filter((r) => r.groupName).map((r) => r.groupName))];
+  namedGroupNames.forEach((gname, idx) => {
+    groups.push({
+      key: `g-${idx}`,
+      name: gname,
+      ingredients: flat.filter((r) => r.groupName === gname).map(toDraft),
+    });
+  });
+
+  return groups;
+}
 
 interface RecipeFormProps {
   mode: "new" | "edit";
@@ -47,9 +86,12 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
   const [baseServings, setBaseServings] = useState(initial?.baseServings ?? "2");
   const [instructions, setInstructions] = useState(initial?.instructions ?? "");
   const [isQuickMenu, setIsQuickMenu] = useState(initial?.isQuickMenu ?? false);
-  const [ingredients, setIngredients] = useState<IngredientRow[]>(
-    initial?.ingredients && initial.ingredients.length > 0 ? initial.ingredients : [emptyRow()]
+  const [groups, setGroups] = useState<GroupDraft[]>(
+    initial?.ingredients
+      ? buildGroupsFromFlat(initial.ingredients)
+      : [{ key: "ungrouped", name: "", ingredients: [emptyIngredient()] }]
   );
+  const [groupKeyCounter, setGroupKeyCounter] = useState(0);
   const [ingredientsChanged, setIngredientsChanged] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -57,17 +99,55 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  function updateIngredient(i: number, patch: Partial<IngredientRow>) {
-    setIngredients((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  function updateGroupName(groupKey: string, name: string) {
+    setGroups((gs) => gs.map((g) => (g.key === groupKey ? { ...g, name } : g)));
     setIngredientsChanged(true);
   }
-  function removeIngredient(i: number) {
-    setIngredients((rows) => rows.filter((_, idx) => idx !== i));
+  function addGroup() {
+    setGroups((gs) => [
+      ...gs,
+      { key: `new-${groupKeyCounter}`, name: "", ingredients: [emptyIngredient()] },
+    ]);
+    setGroupKeyCounter((c) => c + 1);
     setIngredientsChanged(true);
   }
-  function addIngredientRow() {
-    setIngredients((r) => [...r, emptyRow()]);
+  function removeGroup(groupKey: string) {
+    setGroups((gs) => gs.filter((g) => g.key !== groupKey));
     setIngredientsChanged(true);
+  }
+  function updateIngredient(groupKey: string, i: number, patch: Partial<IngredientDraft>) {
+    setGroups((gs) =>
+      gs.map((g) =>
+        g.key === groupKey
+          ? { ...g, ingredients: g.ingredients.map((row, idx) => (idx === i ? { ...row, ...patch } : row)) }
+          : g
+      )
+    );
+    setIngredientsChanged(true);
+  }
+  function removeIngredient(groupKey: string, i: number) {
+    setGroups((gs) =>
+      gs.map((g) => (g.key === groupKey ? { ...g, ingredients: g.ingredients.filter((_, idx) => idx !== i) } : g))
+    );
+    setIngredientsChanged(true);
+  }
+  function addIngredientToGroup(groupKey: string) {
+    setGroups((gs) =>
+      gs.map((g) => (g.key === groupKey ? { ...g, ingredients: [...g.ingredients, emptyIngredient()] } : g))
+    );
+    setIngredientsChanged(true);
+  }
+
+  // グループ構造をDB保存用のフラットな配列に変換
+  function flattenGroups(): IngredientRow[] {
+    const flat: IngredientRow[] = [];
+    for (const g of groups) {
+      for (const ing of g.ingredients) {
+        if (ing.name.trim() === "") continue;
+        flat.push({ ...ing, groupName: g.name });
+      }
+    }
+    return flat;
   }
 
   async function estimateNutrition(recipeIdForSave: string, validIngredients: IngredientRow[]) {
@@ -111,7 +191,7 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
       return;
     }
 
-    const validIngredients = ingredients.filter((r) => r.name.trim() !== "");
+    const validIngredients = flattenGroups();
     const recipePayload = {
       name,
       category,
@@ -188,8 +268,7 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
     setRecalculating(true);
     setNotice(null);
     try {
-      const validIngredients = ingredients.filter((r) => r.name.trim() !== "");
-      await estimateNutrition(recipeId, validIngredients);
+      await estimateNutrition(recipeId, flattenGroups());
       setNotice("カロリーを再計算しました");
     } catch {
       setNotice("再計算に失敗しました。もう一度お試しください");
@@ -251,59 +330,91 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
         </label>
       </div>
 
-      <div className="sticker p-4">
-        <div className="font-display font-bold text-sm mb-1">材料</div>
-        <p className="text-[11px] text-ink/50 mb-2">
-          「メイン」「ソース」のように部位を分けたい場合は、グループ名を入力してください(任意)
+      <div>
+        <div className="font-display font-bold text-sm mb-1 px-1">材料</div>
+        <p className="text-[11px] text-ink/50 mb-2 px-1">
+          「メイン」「ソース」のように部位を分けたい場合は、グループを追加してください
         </p>
-        <div className="flex flex-col gap-2">
-          {ingredients.map((row, i) => (
-            <div key={i} className="flex gap-1.5 items-center">
-              <input
-                placeholder="グループ(任意)"
-                value={row.groupName}
-                onChange={(e) => updateIngredient(i, { groupName: e.target.value })}
-                className="input w-[84px] text-xs"
-              />
-              <input
-                placeholder="食材名"
-                value={row.name}
-                onChange={(e) => updateIngredient(i, { name: e.target.value })}
-                className="input flex-1 min-w-0"
-              />
-              <input
-                placeholder="量(例: 300g, 1枚, 少々)"
-                value={row.quantityText}
-                onChange={(e) => updateIngredient(i, { quantityText: e.target.value })}
-                className="input w-[110px]"
-              />
-              <select
-                value={row.ingredient_type}
-                onChange={(e) =>
-                  updateIngredient(i, { ingredient_type: e.target.value as IngredientType })
-                }
-                className="input w-[74px] text-xs"
-              >
-                <option value="食材">食材</option>
-                <option value="調味料">調味料</option>
-              </select>
+
+        <div className="flex flex-col gap-3">
+          {groups.map((g) => (
+            <div key={g.key} className="sticker sticker-sm p-3">
+              {g.key !== "ungrouped" ? (
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    value={g.name}
+                    onChange={(e) => updateGroupName(g.key, e.target.value)}
+                    placeholder="グループ名(例: ソース)"
+                    className="input flex-1 font-display font-bold text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeGroup(g.key)}
+                    className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-ink/50"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                groups.length > 1 && (
+                  <div className="font-display font-bold text-xs text-ink/50 mb-2">(グループなし)</div>
+                )
+              )}
+
+              <div className="flex flex-col gap-2">
+                {g.ingredients.map((row, i) => (
+                  <div key={i} className="flex gap-1.5 items-center">
+                    <input
+                      placeholder="食材名"
+                      value={row.name}
+                      onChange={(e) => updateIngredient(g.key, i, { name: e.target.value })}
+                      className="input flex-1 min-w-0"
+                    />
+                    <input
+                      placeholder="量(例: 300g, 1枚, 少々)"
+                      value={row.quantityText}
+                      onChange={(e) => updateIngredient(g.key, i, { quantityText: e.target.value })}
+                      className="input w-[110px]"
+                    />
+                    <select
+                      value={row.ingredient_type}
+                      onChange={(e) =>
+                        updateIngredient(g.key, i, { ingredient_type: e.target.value as IngredientType })
+                      }
+                      className="input w-[74px] text-xs"
+                    >
+                      <option value="食材">食材</option>
+                      <option value="調味料">調味料</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => removeIngredient(g.key, i)}
+                      className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-ink/50"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
               <button
                 type="button"
-                onClick={() => removeIngredient(i)}
-                className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-ink/50"
+                onClick={() => addIngredientToGroup(g.key)}
+                className="mt-2 flex items-center gap-1 text-xs font-display font-bold text-ink/70"
               >
-                <TrashIcon className="w-4 h-4" />
+                <PlusIcon className="w-3.5 h-3.5" />
+                材料を追加
               </button>
             </div>
           ))}
         </div>
+
         <button
           type="button"
-          onClick={addIngredientRow}
-          className="mt-2 flex items-center gap-1 text-xs font-display font-bold text-ink/70"
+          onClick={addGroup}
+          className="mt-2 w-full flex items-center justify-center gap-1 text-xs font-display font-bold py-2.5 rounded-2xl border-2 border-dashed border-ink text-ink/70"
         >
           <PlusIcon className="w-3.5 h-3.5" />
-          材料を追加
+          グループを追加(メイン・ソース等)
         </button>
       </div>
 
