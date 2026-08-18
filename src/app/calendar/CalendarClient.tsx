@@ -348,6 +348,7 @@ function PlanEditModal({
     existing ? existing.meal_plan_items.map(draftFromItem) : []
   );
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // 新しい料理を追加するための入力欄
   const [newType, setNewType] = useState<ContentType>("recipe");
@@ -381,9 +382,10 @@ function PlanEditModal({
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
 
     // 1. meal_plans本体をupsert(なければ作成)
-    const { data: mealPlan } = await supabase
+    const { data: mealPlan, error: planError } = await supabase
       .from("meal_plans")
       .upsert(
         { user_id: userId, date, meal_slot: slot, source: "manual" },
@@ -392,13 +394,22 @@ function PlanEditModal({
       .select()
       .single();
 
-    if (!mealPlan) {
+    if (planError || !mealPlan) {
+      setSaveError(`予定の保存に失敗しました: ${planError?.message ?? "不明なエラー"}`);
       setSaving(false);
       return;
     }
 
     // 2. 既存の中身を一旦削除して、入れ直す(シンプルさ優先)
-    await supabase.from("meal_plan_items").delete().eq("meal_plan_id", mealPlan.id);
+    const { error: deleteError } = await supabase
+      .from("meal_plan_items")
+      .delete()
+      .eq("meal_plan_id", mealPlan.id);
+    if (deleteError) {
+      setSaveError(`既存データの削除に失敗しました: ${deleteError.message}`);
+      setSaving(false);
+      return;
+    }
 
     if (items.length > 0) {
       const rows = await Promise.all(
@@ -423,7 +434,12 @@ function PlanEditModal({
           };
         })
       );
-      await supabase.from("meal_plan_items").insert(rows);
+      const { error: insertError } = await supabase.from("meal_plan_items").insert(rows);
+      if (insertError) {
+        setSaveError(`料理の保存に失敗しました: ${insertError.message}`);
+        setSaving(false);
+        return;
+      }
     }
 
     setSaving(false);
@@ -516,6 +532,10 @@ function PlanEditModal({
         </button>
       </div>
 
+      {saveError && (
+        <p className="text-xs text-[#c0392b] mb-2 px-1">{saveError}</p>
+      )}
+
       <div className="flex gap-2">
         {existing && (
           <button
@@ -559,9 +579,11 @@ function RecordModal({
   const [comment, setComment] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
 
     const { data: record, error } = await supabase
       .from("meal_records")
@@ -575,7 +597,13 @@ function RecordModal({
       .select()
       .single();
 
-    if (!error && record) {
+    if (error || !record) {
+      setSaveError(`記録の保存に失敗しました: ${error?.message ?? "不明なエラー"}`);
+      setSaving(false);
+      return;
+    }
+
+    {
       const itemRows = plan.meal_plan_items.map((it, idx) => ({
         meal_record_id: record.id,
         content_type: it.content_type,
@@ -586,7 +614,12 @@ function RecordModal({
         sort_order: idx,
       }));
       if (itemRows.length > 0) {
-        await supabase.from("meal_record_items").insert(itemRows);
+        const { error: itemsError } = await supabase.from("meal_record_items").insert(itemRows);
+        if (itemsError) {
+          setSaveError(`記録の詳細の保存に失敗しました: ${itemsError.message}`);
+          setSaving(false);
+          return;
+        }
       }
 
       if (file) {
@@ -598,6 +631,8 @@ function RecordModal({
             meal_record_id: record.id,
             photo_url: pub.publicUrl,
           });
+        } else {
+          setSaveError(`写真のアップロードに失敗しました: ${uploadError.message}`);
         }
       }
 
@@ -649,6 +684,7 @@ function RecordModal({
           className="text-xs"
         />
       </label>
+      {saveError && <p className="text-xs text-[#c0392b] mb-2 px-1">{saveError}</p>}
       <button
         onClick={handleSave}
         disabled={saving}
