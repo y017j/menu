@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CheckIcon, PlusIcon } from "@/components/Icons";
 import { addDays, formatMD } from "@/lib/date";
+import { parseQuantity } from "@/lib/quantity";
 
 interface ItemRow {
   id: string;
@@ -201,11 +202,13 @@ export default function ShoppingClient({
       .in("id", recipeIds);
     const { data: ingredientsData } = await supabase
       .from("recipe_ingredients")
-      .select("recipe_id, name, amount, unit, ingredient_type")
+      .select("recipe_id, name, quantity_text, ingredient_type")
       .in("recipe_id", recipeIds);
 
-    // recipe_id -> 何回登場したか(人数調整はservings指定があればそれを使う、なければbase_servings)
-    const totals = new Map<string, { amount: number; unit: string | null; type: string }>();
+    // パースできた量(数値+単位)は name+単位 をキーに合算する
+    const numericTotals = new Map<string, { amount: number; unit: string; type: string }>();
+    // パースできない量("少々"等)はそのまま個別の買い物項目として並べる(合算しない)
+    const textOnlyRows: { name: string; quantityText: string; type: string }[] = [];
 
     for (const plan of targetPlans) {
       const recipe = recipesData?.find((r) => r.id === plan.recipe_id);
@@ -215,31 +218,55 @@ export default function ShoppingClient({
 
       const ings = ingredientsData?.filter((i) => i.recipe_id === plan.recipe_id) ?? [];
       for (const ing of ings) {
-        const key = `${ing.name}_${ing.unit ?? ""}`;
-        const amount = (ing.amount ?? 0) * ratio;
-        const existing = totals.get(key);
-        totals.set(key, {
-          amount: (existing?.amount ?? 0) + amount,
-          unit: ing.unit,
-          type: ing.ingredient_type,
-        });
+        const parsed = parseQuantity(ing.quantity_text);
+        if (parsed) {
+          const key = `${ing.name}_${parsed.unit}`;
+          const existing = numericTotals.get(key);
+          numericTotals.set(key, {
+            amount: (existing?.amount ?? 0) + parsed.value * ratio,
+            unit: parsed.unit,
+            type: ing.ingredient_type,
+          });
+        } else if (ing.quantity_text) {
+          textOnlyRows.push({
+            name: ing.name,
+            quantityText: ing.quantity_text,
+            type: ing.ingredient_type,
+          });
+        } else {
+          textOnlyRows.push({ name: ing.name, quantityText: "", type: ing.ingredient_type });
+        }
       }
     }
 
     const shokuzaiCat = categories.find((c) => c.name === "食材");
     const chomiryoCat = categories.find((c) => c.name === "調味料");
+    const categoryIdFor = (type: string) =>
+      type === "調味料" ? chomiryoCat?.id ?? null : shokuzaiCat?.id ?? null;
 
-    const rows = [...totals.entries()].map(([key, v]) => {
-      const name = key.split("_")[0];
+    const numericRows = [...numericTotals.entries()].map(([key, v]) => {
+      const name = key.slice(0, key.length - v.unit.length - 1);
+      const roundedAmount = Math.round(v.amount * 100) / 100;
       return {
         shopping_list_id: id,
         name,
-        amount: v.amount || null,
-        unit: v.unit,
-        category_id: v.type === "調味料" ? chomiryoCat?.id ?? null : shokuzaiCat?.id ?? null,
+        amount: roundedAmount || null,
+        unit: v.unit || null,
+        category_id: categoryIdFor(v.type),
         source: "auto_from_recipe" as const,
       };
     });
+
+    const textRows = textOnlyRows.map((t) => ({
+      shopping_list_id: id,
+      name: t.quantityText ? `${t.name}(${t.quantityText})` : t.name,
+      amount: null,
+      unit: null,
+      category_id: categoryIdFor(t.type),
+      source: "auto_from_recipe" as const,
+    }));
+
+    const rows = [...numericRows, ...textRows];
 
     if (rows.length > 0) {
       await supabase.from("shopping_items").insert(rows);

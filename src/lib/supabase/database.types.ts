@@ -48,8 +48,7 @@ export interface Database {
           id: string;
           recipe_id: string;
           name: string;
-          amount: number | null;
-          unit: string | null;
+          quantity_text: string | null;
           is_optional: boolean;
           ingredient_type: IngredientType;
           sort_order: number;

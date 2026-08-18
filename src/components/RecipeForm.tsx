@@ -9,16 +9,14 @@ import type { IngredientType } from "@/lib/supabase/database.types";
 export interface IngredientRow {
   id?: string;
   name: string;
-  amount: string;
-  unit: string;
+  quantityText: string;
   ingredient_type: IngredientType;
   is_optional: boolean;
 }
 
 const emptyRow = (): IngredientRow => ({
   name: "",
-  amount: "",
-  unit: "",
+  quantityText: "",
   ingredient_type: "食材",
   is_optional: false,
 });
@@ -79,8 +77,7 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
         baseServings: Number(baseServings) || 2,
         ingredients: validIngredients.map((r) => ({
           name: r.name,
-          amount: r.amount ? Number(r.amount) : null,
-          unit: r.unit || null,
+          quantityText: r.quantityText || null,
         })),
       }),
     });
@@ -156,8 +153,7 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
         validIngredients.map((r, idx) => ({
           recipe_id: targetId!,
           name: r.name,
-          amount: r.amount ? Number(r.amount) : null,
-          unit: r.unit || null,
+          quantity_text: r.quantityText || null,
           ingredient_type: r.ingredient_type,
           is_optional: r.is_optional,
           sort_order: idx,
@@ -263,16 +259,10 @@ export default function RecipeForm({ mode, recipeId, initial }: RecipeFormProps)
                 className="input flex-1 min-w-0"
               />
               <input
-                placeholder="量"
-                value={row.amount}
-                onChange={(e) => updateIngredient(i, { amount: e.target.value })}
-                className="input w-14"
-              />
-              <input
-                placeholder="単位"
-                value={row.unit}
-                onChange={(e) => updateIngredient(i, { unit: e.target.value })}
-                className="input w-16"
+                placeholder="量(例: 300g, 1枚, 少々)"
+                value={row.quantityText}
+                onChange={(e) => updateIngredient(i, { quantityText: e.target.value })}
+                className="input w-[120px]"
               />
               <select
                 value={row.ingredient_type}

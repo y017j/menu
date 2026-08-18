@@ -82,10 +82,7 @@ export default async function RecipeDetailPage({
             {shokuzai.map((i) => (
               <li key={i.id} className="flex justify-between border-b border-dashed border-ink/20 pb-1">
                 <span>{i.name}{i.is_optional && <span className="text-ink/40 text-xs ml-1">(任意)</span>}</span>
-                <span className="text-ink/70">
-                  {i.amount ?? ""}
-                  {i.unit ?? ""}
-                </span>
+                <span className="text-ink/70">{i.quantity_text ?? ""}</span>
               </li>
             ))}
           </ul>
@@ -97,10 +94,7 @@ export default async function RecipeDetailPage({
               {chomiryo.map((i) => (
                 <li key={i.id} className="flex justify-between border-b border-dashed border-ink/20 pb-1">
                   <span>{i.name}</span>
-                  <span className="text-ink/70">
-                    {i.amount ?? ""}
-                    {i.unit ?? ""}
-                  </span>
+                  <span className="text-ink/70">{i.quantity_text ?? ""}</span>
                 </li>
               ))}
             </ul>

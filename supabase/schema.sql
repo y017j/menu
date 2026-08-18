@@ -75,8 +75,7 @@ CREATE TABLE recipe_ingredients (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   recipe_id       UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
   name            VARCHAR(100) NOT NULL,
-  amount          NUMERIC(10,2),             -- 数量不明な場合はNULL許容
-  unit            VARCHAR(20),               -- g / 個 / 大さじ 等（自由入力、厳密換算はしない）
+  quantity_text   VARCHAR(50),               -- 自由入力(例: "300g", "1枚", "大さじ2", "少々")
   is_optional     BOOLEAN NOT NULL DEFAULT false,
   ingredient_type VARCHAR(10) NOT NULL DEFAULT '食材' CHECK (ingredient_type IN ('食材','調味料')),
   sort_order      INT NOT NULL DEFAULT 0

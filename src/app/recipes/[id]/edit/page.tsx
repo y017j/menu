@@ -37,8 +37,7 @@ export default async function EditRecipePage({
           ingredients: (ingredients ?? []).map((i) => ({
             id: i.id,
             name: i.name,
-            amount: i.amount?.toString() ?? "",
-            unit: i.unit ?? "",
+            quantityText: i.quantity_text ?? "",
             ingredient_type: i.ingredient_type,
             is_optional: i.is_optional,
           })),
