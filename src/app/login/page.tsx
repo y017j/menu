@@ -4,11 +4,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+// Supabase Authはメールアドレス形式のIDを必要とするため、
+// ユーザーが入力した「ユーザー名」から内部的にダミーのメールアドレスを組み立てて使う。
+// ユーザー自身はメールアドレスを一切意識しなくてよい。
+const FAKE_EMAIL_DOMAIN = "gohan-note.local";
+
+function usernameToFakeEmail(username: string): string {
+  const normalized = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  return `${normalized}@${FAKE_EMAIL_DOMAIN}`;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -17,19 +27,37 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const normalized = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    if (normalized.length < 3) {
+      setError("ユーザー名は半角英数字3文字以上で入力してね");
+      return;
+    }
+    const fakeEmail = usernameToFakeEmail(username);
+
     setLoading(true);
 
     if (mode === "login") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({
+        email: fakeEmail,
+        password,
+      });
       if (error) {
-        setError("メールアドレスかパスワードが違うみたい。もう一度確認してね");
+        setError("ユーザー名かパスワードが違うみたい。もう一度確認してね");
         setLoading(false);
         return;
       }
     } else {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email: fakeEmail,
+        password,
+      });
       if (error) {
-        setError(error.message);
+        if (error.message.includes("already registered") || error.message.includes("already been registered")) {
+          setError("そのユーザー名はもう使われているみたい。別の名前を試してね");
+        } else {
+          setError(error.message);
+        }
         setLoading(false);
         return;
       }
@@ -37,8 +65,8 @@ export default function LoginPage() {
       if (data.user) {
         await supabase.from("users").upsert({
           id: data.user.id,
-          email,
-          display_name: displayName || "ゲスト",
+          email: fakeEmail,
+          display_name: displayName || normalized,
           household_size: 1,
         });
         // デフォルトの買い物カテゴリを投入(■R、自由に追加/編集可能)
@@ -87,18 +115,18 @@ export default function LoginPage() {
         {mode === "signup" && (
           <input
             type="text"
-            placeholder="表示名"
+            placeholder="表示名(アプリ内での呼び名)"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             className="border-2 border-ink rounded-2xl px-4 py-2 text-sm"
           />
         )}
         <input
-          type="email"
-          placeholder="メールアドレス"
+          type="text"
+          placeholder="ユーザー名(半角英数字)"
           required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
           className="border-2 border-ink rounded-2xl px-4 py-2 text-sm"
         />
         <input
