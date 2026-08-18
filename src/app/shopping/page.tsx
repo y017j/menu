@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { toDateStr, weekDatesFrom } from "@/lib/date";
+import { toDateStr } from "@/lib/date";
 import ShoppingClient from "./ShoppingClient";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +47,7 @@ export default async function ShoppingPage() {
     .slice(0, 6)
     .map(([name]) => name);
 
-  const weekDates = weekDatesFrom(new Date()).map(toDateStr);
+  const todayStr = toDateStr(new Date());
 
   return (
     <ShoppingClient
@@ -56,8 +56,7 @@ export default async function ShoppingPage() {
       initialItems={items ?? []}
       categories={categories ?? []}
       frequentItems={frequentItems}
-      weekStart={weekDates[0]}
-      weekEnd={weekDates[6]}
+      todayStr={todayStr}
     />
   );
 }

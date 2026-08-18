@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CheckIcon, PlusIcon } from "@/components/Icons";
+import { addDays } from "@/lib/date";
 
 interface ItemRow {
   id: string;
@@ -19,29 +20,39 @@ interface CategoryRow {
   name: string;
 }
 
+const SLOTS = ["朝", "昼", "夜"] as const;
+type Slot = (typeof SLOTS)[number];
+const SLOT_ORDER: Record<Slot, number> = { 朝: 0, 昼: 1, 夜: 2 };
+
 export default function ShoppingClient({
   userId,
   listId,
   initialItems,
   categories,
   frequentItems,
-  weekStart,
-  weekEnd,
+  todayStr,
 }: {
   userId: string;
   listId: string | null;
   initialItems: ItemRow[];
   categories: CategoryRow[];
   frequentItems: string[];
-  weekStart: string;
-  weekEnd: string;
+  todayStr: string;
 }) {
   const router = useRouter();
   const supabase = createClient();
   const [newItemName, setNewItemName] = useState("");
   const [busy, setBusy] = useState(false);
+  // チェック操作等はサーバー往復を待たず即座に画面へ反映するため、ローカルstateで保持する
+  const [items, setItems] = useState<ItemRow[]>(initialItems);
+  const tempIdCounter = useRef(0);
 
-  const checkedCount = initialItems.filter((i) => i.is_checked).length;
+  const [startDate, setStartDate] = useState(todayStr);
+  const [startSlot, setStartSlot] = useState<Slot>("朝");
+  const [endDate, setEndDate] = useState(addDays(todayStr, 6));
+  const [endSlot, setEndSlot] = useState<Slot>("夜");
+
+  const checkedCount = items.filter((i) => i.is_checked).length;
 
   async function ensureListId(): Promise<string> {
     if (listId) return listId;
@@ -55,53 +66,86 @@ export default function ShoppingClient({
 
   async function addItem(name: string, categoryName?: string) {
     if (!name.trim()) return;
-    setBusy(true);
-    const id = await ensureListId();
     const category = categories.find((c) => c.name === (categoryName ?? "食材"));
-    await supabase.from("shopping_items").insert({
-      shopping_list_id: id,
-      name: name.trim(),
-      category_id: category?.id ?? null,
-      source: "manual",
-    });
+
+    // 楽観的に画面へ即反映(仮IDで先に表示し、保存後に本物のデータへ差し替える)
+    const tempId = `temp-${tempIdCounter.current++}`;
+    setItems((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        name: name.trim(),
+        amount: null,
+        unit: null,
+        is_checked: false,
+        category_id: category?.id ?? null,
+        shopping_categories: category ? { name: category.name } : null,
+      },
+    ]);
     setNewItemName("");
-    setBusy(false);
-    router.refresh();
+
+    const id = await ensureListId();
+    const { data: inserted } = await supabase
+      .from("shopping_items")
+      .insert({
+        shopping_list_id: id,
+        name: name.trim(),
+        category_id: category?.id ?? null,
+        source: "manual",
+      })
+      .select()
+      .single();
+
+    if (inserted) {
+      setItems((prev) => prev.map((it) => (it.id === tempId ? { ...it, id: inserted.id } : it)));
+    }
   }
 
   async function toggleItem(item: ItemRow) {
     const next = !item.is_checked;
-    await supabase
+    // 画面上は即座に反映
+    setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, is_checked: next } : it)));
+
+    // 保存は裏側で行い、画面の応答を待たせない
+    supabase
       .from("shopping_items")
       .update({ is_checked: next, checked_at: next ? new Date().toISOString() : null })
-      .eq("id", item.id);
-
-    if (next) {
-      await supabase.from("shopping_history").insert({
-        user_id: userId,
-        item_name: item.name,
-        category_id: item.category_id,
-        purchased_at: new Date().toISOString().slice(0, 10),
-        shopping_list_id: listId,
+      .eq("id", item.id)
+      .then(() => {
+        if (next) {
+          supabase.from("shopping_history").insert({
+            user_id: userId,
+            item_name: item.name,
+            category_id: item.category_id,
+            purchased_at: new Date().toISOString().slice(0, 10),
+            shopping_list_id: listId,
+          });
+        }
       });
-    }
-    router.refresh();
   }
 
-  // ■O: 今週の献立(meal_plans, content_type=recipe)から材料を自動集計
+  // ■O: 指定期間(開始日+食事枠 〜 終了日+食事枠)の献立から材料を自動集計
   async function aggregateFromRecipes() {
     setBusy(true);
     const id = await ensureListId();
 
-    const { data: plans } = await supabase
+    const { data: plansRaw } = await supabase
       .from("meal_plans")
-      .select("recipe_id, servings")
+      .select("recipe_id, servings, date, meal_slot")
       .eq("content_type", "recipe")
-      .gte("date", weekStart)
-      .lte("date", weekEnd)
+      .gte("date", startDate)
+      .lte("date", endDate)
       .not("recipe_id", "is", null);
 
-    const recipeIds = [...new Set((plans ?? []).map((p) => p.recipe_id!))];
+    // 境界日は指定した食事枠以降/以前のみ対象にする
+    const plans = (plansRaw ?? []).filter((p) => {
+      const slotOrder = SLOT_ORDER[p.meal_slot as Slot];
+      if (p.date === startDate && slotOrder < SLOT_ORDER[startSlot]) return false;
+      if (p.date === endDate && slotOrder > SLOT_ORDER[endSlot]) return false;
+      return true;
+    });
+
+    const recipeIds = [...new Set(plans.map((p) => p.recipe_id!))];
     if (recipeIds.length === 0) {
       setBusy(false);
       router.refresh();
@@ -120,7 +164,7 @@ export default function ShoppingClient({
     // recipe_id -> 何回登場したか(人数調整はservings指定があればそれを使う、なければbase_servings)
     const totals = new Map<string, { amount: number; unit: string | null; type: string }>();
 
-    for (const plan of plans ?? []) {
+    for (const plan of plans) {
       const recipe = recipesData?.find((r) => r.id === plan.recipe_id);
       if (!recipe) continue;
       const servings = plan.servings ?? recipe.base_servings;
@@ -161,15 +205,56 @@ export default function ShoppingClient({
     router.refresh();
   }
 
-  const grouped = groupByCategory(initialItems);
+  const grouped = groupByCategory(items);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="font-display font-black text-xl">買い物リスト</h1>
         <span className="text-xs font-display font-bold px-3 py-1 bg-mint-soft border-2 border-ink rounded-2xl">
-          {checkedCount}/{initialItems.length} 完了
+          {checkedCount}/{items.length} 完了
         </span>
+      </div>
+
+      <div className="sticker sticker-sm p-3 mb-4">
+        <div className="font-display font-bold text-xs mb-2">集計する期間を選ぶ</div>
+        <div className="flex items-center gap-1.5 flex-wrap text-xs">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="input py-1.5 px-2 text-xs"
+          />
+          <select
+            value={startSlot}
+            onChange={(e) => setStartSlot(e.target.value as Slot)}
+            className="input py-1.5 px-2 text-xs"
+          >
+            {SLOTS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <span className="text-ink/50">〜</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="input py-1.5 px-2 text-xs"
+          />
+          <select
+            value={endSlot}
+            onChange={(e) => setEndSlot(e.target.value as Slot)}
+            className="input py-1.5 px-2 text-xs"
+          >
+            {SLOTS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <button
@@ -178,7 +263,7 @@ export default function ShoppingClient({
         className="sticker-btn w-full mb-4 bg-yellow border-2.5 border-ink rounded-2xl py-3 font-display font-bold text-sm disabled:opacity-60"
         style={{ boxShadow: "4px 4px 0 var(--ink)" }}
       >
-        今週の献立から自動集計する
+        この期間の献立から自動集計する
       </button>
 
       {Object.entries(grouped).map(([catName, items]) => (

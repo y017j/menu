@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { weekdayJa } from "@/lib/date";
+import { toDateStr } from "@/lib/date";
 import { PlusIcon } from "@/components/Icons";
 import type {
   CookReluctance,
@@ -39,26 +39,38 @@ interface EatOutOption {
 
 const SLOTS: MealSlot[] = ["朝", "昼", "夜"];
 const RELUCTANCE_OPTIONS: CookReluctance[] = ["普通", "あまり料理したくない", "絶対料理したくない"];
+const WEEKDAY_JA = ["月", "火", "水", "木", "金", "土", "日"];
 
 export default function CalendarClient({
-  weekDates,
+  year,
+  month0,
+  gridDates,
   initialMealPlans,
   initialDaySettings,
   recipes,
   eatOutOptions,
+  userId,
 }: {
-  weekDates: string[];
+  year: number;
+  month0: number;
+  gridDates: string[];
   initialMealPlans: MealPlanRow[];
   initialDaySettings: DaySettingRow[];
   recipes: RecipeOption[];
   eatOutOptions: EatOutOption[];
+  userId: string;
 }) {
   const router = useRouter();
   const supabase = createClient();
-  const today = weekDates.find((d) => d === toTodayStr()) ?? weekDates[0];
-  const [selectedDate, setSelectedDate] = useState(today);
+  const todayStr = toDateStr(new Date());
+  const currentMonthKey = `${year}-${String(month0 + 1).padStart(2, "0")}`;
+
+  const [selectedDate, setSelectedDate] = useState<string | null>(
+    gridDates.includes(todayStr) ? todayStr : null
+  );
   const [editingSlot, setEditingSlot] = useState<MealSlot | null>(null);
   const [recordingPlan, setRecordingPlan] = useState<MealPlanRow | null>(null);
+  const [daySettings, setDaySettings] = useState<DaySettingRow[]>(initialDaySettings);
 
   const plansByDateSlot = useMemo(() => {
     const map = new Map<string, MealPlanRow>();
@@ -66,107 +78,169 @@ export default function CalendarClient({
     return map;
   }, [initialMealPlans]);
 
-  const daySetting = initialDaySettings.find((d) => d.date === selectedDate);
+  const plansCountByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    initialMealPlans.forEach((p) => map.set(p.date, (map.get(p.date) ?? 0) + 1));
+    return map;
+  }, [initialMealPlans]);
+
+  const daySettingsByDate = useMemo(() => {
+    const map = new Map<string, CookReluctance>();
+    daySettings.forEach((d) => map.set(d.date, d.cook_reluctance));
+    return map;
+  }, [daySettings]);
+
+  function goToMonth(offset: number) {
+    const d = new Date(year, month0 + offset, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    router.push(`/calendar?month=${key}`);
+  }
+
+  const daySetting = selectedDate ? daySettingsByDate.get(selectedDate) : undefined;
 
   async function updateReluctance(value: CookReluctance) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from("day_settings").upsert(
-      {
-        user_id: user.id,
-        date: selectedDate,
-        cook_reluctance: value,
-      },
+    if (!selectedDate) return;
+    // 画面上は即座に反映し、保存は裏側で行う
+    setDaySettings((prev) => {
+      const exists = prev.find((d) => d.date === selectedDate);
+      if (exists) {
+        return prev.map((d) => (d.date === selectedDate ? { ...d, cook_reluctance: value } : d));
+      }
+      return [...prev, { id: `temp-${selectedDate}`, date: selectedDate, cook_reluctance: value }];
+    });
+    supabase.from("day_settings").upsert(
+      { user_id: userId, date: selectedDate, cook_reluctance: value },
       { onConflict: "user_id,date" }
     );
-    router.refresh();
   }
 
   return (
     <div>
-      <h1 className="font-display font-black text-xl mb-4">カレンダー</h1>
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={() => goToMonth(-1)} className="w-8 h-8 flex items-center justify-center font-display font-bold text-lg">
+          ‹
+        </button>
+        <h1 className="font-display font-black text-xl">
+          {year}年{month0 + 1}月
+        </h1>
+        <button onClick={() => goToMonth(1)} className="w-8 h-8 flex items-center justify-center font-display font-bold text-lg">
+          ›
+        </button>
+      </div>
 
-      <div className="flex gap-1.5 mb-4 overflow-x-auto">
-        {weekDates.map((d) => {
-          const dateObj = new Date(d + "T00:00:00");
-          const active = d === selectedDate;
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {WEEKDAY_JA.map((w) => (
+          <div key={w} className="text-center text-[11px] font-display font-bold text-ink/50">
+            {w}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 mb-4">
+        {gridDates.map((dateStr) => {
+          const d = new Date(dateStr + "T00:00:00");
+          const inMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` === currentMonthKey;
+          const isToday = dateStr === todayStr;
+          const isSelected = dateStr === selectedDate;
+          const reluctance = daySettingsByDate.get(dateStr);
+          const count = plansCountByDate.get(dateStr) ?? 0;
+
           return (
             <button
-              key={d}
-              onClick={() => setSelectedDate(d)}
-              className={`min-w-[44px] text-center py-2 px-1 rounded-2xl border-2 border-ink font-display flex-shrink-0 ${
-                active ? "bg-yellow shadow-[3px_3px_0_var(--ink)]" : "bg-white"
-              }`}
+              key={dateStr}
+              onClick={() => setSelectedDate(dateStr)}
+              className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center relative ${
+                isSelected
+                  ? "border-ink bg-yellow shadow-[2px_2px_0_var(--ink)]"
+                  : isToday
+                  ? "border-coral bg-white"
+                  : "border-transparent bg-white/60"
+              } ${!inMonth ? "opacity-30" : ""}`}
             >
-              <div className="text-[10px]">{weekdayJa(dateObj)}</div>
-              <div className="text-sm">{dateObj.getDate()}</div>
+              <span className="text-[13px] font-display font-bold">{d.getDate()}</span>
+              <div className="flex gap-0.5 mt-0.5 h-1.5">
+                {count > 0 && <span className="w-1.5 h-1.5 rounded-full bg-mint" />}
+                {reluctance && reluctance !== "普通" && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-pink" />
+                )}
+              </div>
             </button>
           );
         })}
       </div>
 
-      <div className="mb-3 flex gap-1.5 flex-wrap">
-        {RELUCTANCE_OPTIONS.map((opt) => (
-          <button
-            key={opt}
-            onClick={() => updateReluctance(opt)}
-            className={`text-xs font-display font-bold px-3 py-1.5 rounded-2xl border-2 border-ink ${
-              (daySetting?.cook_reluctance ?? "普通") === opt ? "bg-pink-soft" : "bg-white"
-            }`}
-          >
-            {opt}
-          </button>
-        ))}
-      </div>
+      {!selectedDate && (
+        <div className="sticker p-6 text-center text-sm text-ink/60">
+          日付をタップすると、その日の予定を確認・登録できます
+        </div>
+      )}
 
-      <div className="flex flex-col gap-2.5">
-        {SLOTS.map((slot) => {
-          const plan = plansByDateSlot.get(`${selectedDate}_${slot}`);
-          return (
-            <div key={slot} className="sticker sticker-sm p-3 flex gap-3 items-center">
-              <div className="font-display font-bold text-[11px] text-white bg-ink rounded-xl px-2 py-1.5 [writing-mode:vertical-rl]">
-                {slot}
-              </div>
-              {plan ? (
-                <div className="flex-1 min-w-0">
-                  <div className="font-display font-bold text-sm truncate">
-                    {planLabel(plan, recipes, eatOutOptions)}
+      {selectedDate && (
+        <div>
+          <div className="font-display font-bold text-sm mb-2">
+            {new Date(selectedDate + "T00:00:00").getMonth() + 1}/
+            {new Date(selectedDate + "T00:00:00").getDate()}の予定
+          </div>
+
+          <div className="mb-3 flex gap-1.5 flex-wrap">
+            {RELUCTANCE_OPTIONS.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => updateReluctance(opt)}
+                className={`text-xs font-display font-bold px-3 py-1.5 rounded-2xl border-2 border-ink ${
+                  (daySetting ?? "普通") === opt ? "bg-pink-soft" : "bg-white"
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            {SLOTS.map((slot) => {
+              const plan = plansByDateSlot.get(`${selectedDate}_${slot}`);
+              return (
+                <div key={slot} className="sticker sticker-sm p-3 flex gap-3 items-center">
+                  <div className="font-display font-bold text-[11px] text-white bg-ink rounded-xl px-2 py-1.5 [writing-mode:vertical-rl]">
+                    {slot}
                   </div>
-                  <div className="text-xs text-ink/50 flex items-center gap-2 mt-0.5">
-                    {plan.nutrition_snapshot?.calories_kcal
-                      ? `約${plan.nutrition_snapshot.calories_kcal}kcal`
-                      : "予定"}
+                  {plan ? (
+                    <div className="flex-1 min-w-0">
+                      <div className="font-display font-bold text-sm truncate">
+                        {planLabel(plan, recipes, eatOutOptions)}
+                      </div>
+                      <div className="text-xs text-ink/50 flex items-center gap-2 mt-0.5 flex-wrap">
+                        {plan.nutrition_snapshot?.calories_kcal
+                          ? `約${plan.nutrition_snapshot.calories_kcal}kcal`
+                          : "予定"}
+                        <button onClick={() => setEditingSlot(slot)} className="underline underline-offset-2">
+                          編集
+                        </button>
+                        <button
+                          onClick={() => setRecordingPlan(plan)}
+                          className="underline underline-offset-2 text-coral"
+                        >
+                          作った記録をつける
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                     <button
                       onClick={() => setEditingSlot(slot)}
-                      className="underline underline-offset-2"
+                      className="flex-1 flex items-center gap-1.5 text-sm text-ink/50 font-display font-bold"
                     >
-                      編集
+                      <PlusIcon className="w-4 h-4" />
+                      予定を追加
                     </button>
-                    <button
-                      onClick={() => setRecordingPlan(plan)}
-                      className="underline underline-offset-2 text-coral"
-                    >
-                      作った記録をつける
-                    </button>
-                  </div>
+                  )}
                 </div>
-              ) : (
-                <button
-                  onClick={() => setEditingSlot(slot)}
-                  className="flex-1 flex items-center gap-1.5 text-sm text-ink/50 font-display font-bold"
-                >
-                  <PlusIcon className="w-4 h-4" />
-                  予定を追加
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-      {editingSlot && (
+      {editingSlot && selectedDate && (
         <PlanEditModal
           date={selectedDate}
           slot={editingSlot}
@@ -193,13 +267,6 @@ export default function CalendarClient({
       )}
     </div>
   );
-}
-
-function toTodayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
 }
 
 function planLabel(
@@ -395,9 +462,7 @@ function RecordModal({
 
     if (!error && record && file) {
       const path = `${user.id}/${record.id}-${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("meal-photos")
-        .upload(path, file);
+      const { error: uploadError } = await supabase.storage.from("meal-photos").upload(path, file);
       if (!uploadError) {
         const { data: pub } = supabase.storage.from("meal-photos").getPublicUrl(path);
         await supabase.from("meal_photos").insert({
@@ -407,7 +472,6 @@ function RecordModal({
       }
     }
 
-    // レシピの最終調理日・調理回数キャッシュを更新(■H, ■I)
     if (!error && plan.content_type === "recipe" && plan.recipe_id) {
       const { data: r } = await supabase
         .from("recipes")
@@ -416,10 +480,7 @@ function RecordModal({
         .single();
       await supabase
         .from("recipes")
-        .update({
-          last_cooked_at: plan.date,
-          cooked_count: (r?.cooked_count ?? 0) + 1,
-        })
+        .update({ last_cooked_at: plan.date, cooked_count: (r?.cooked_count ?? 0) + 1 })
         .eq("id", plan.recipe_id);
     }
 
@@ -470,8 +531,8 @@ function ModalShell({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-end justify-center z-50">
-      <div className="sticker w-full max-w-[480px] p-4 rounded-b-none max-h-[85vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/30 flex items-end lg:items-center justify-center z-50">
+      <div className="sticker w-full max-w-[480px] p-4 rounded-b-none lg:rounded-b-2xl max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-display font-bold text-sm">{title}</h2>
           <button onClick={onClose} className="text-ink/50 text-lg leading-none px-2">
