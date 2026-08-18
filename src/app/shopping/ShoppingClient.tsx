@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CheckIcon, PlusIcon } from "@/components/Icons";
-import { addDays } from "@/lib/date";
+import { addDays, formatMD } from "@/lib/date";
 
 interface ItemRow {
   id: string;
@@ -18,6 +18,23 @@ interface ItemRow {
 interface CategoryRow {
   id: string;
   name: string;
+}
+interface PreviewPlan {
+  id: string;
+  date: string;
+  meal_slot: Slot;
+  recipe_id: string;
+  recipe_name: string;
+  servings: number | null;
+  included: boolean;
+}
+
+// Supabaseのjoin結果は単一オブジェクトの場合も配列の場合も型上ありうるため、両対応で名前を取り出す
+function extractRecipeName(recipes: unknown): string {
+  if (Array.isArray(recipes)) {
+    return (recipes[0] as { name?: string } | undefined)?.name ?? "(削除されたレシピ)";
+  }
+  return (recipes as { name?: string } | null)?.name ?? "(削除されたレシピ)";
 }
 
 const SLOTS = ["朝", "昼", "夜"] as const;
@@ -52,6 +69,7 @@ export default function ShoppingClient({
   const [endDate, setEndDate] = useState(addDays(todayStr, 6));
   const [endSlot, setEndSlot] = useState<Slot>("夜");
 
+  const [previewPlans, setPreviewPlans] = useState<PreviewPlan[] | null>(null);
   const checkedCount = items.filter((i) => i.is_checked).length;
 
   async function ensureListId(): Promise<string> {
@@ -124,34 +142,59 @@ export default function ShoppingClient({
       });
   }
 
-  // ■O: 指定期間(開始日+食事枠 〜 終了日+食事枠)の献立から材料を自動集計
-  async function aggregateFromRecipes() {
+  // ■O 前半: 指定期間の対象になる献立一覧を取得してプレビュー表示する
+  async function loadPreview() {
     setBusy(true);
-    const id = await ensureListId();
-
     const { data: plansRaw } = await supabase
       .from("meal_plans")
-      .select("recipe_id, servings, date, meal_slot")
+      .select("id, recipe_id, servings, date, meal_slot, recipes(name)")
       .eq("content_type", "recipe")
       .gte("date", startDate)
       .lte("date", endDate)
-      .not("recipe_id", "is", null);
+      .not("recipe_id", "is", null)
+      .order("date")
+      .order("meal_slot");
 
-    // 境界日は指定した食事枠以降/以前のみ対象にする
-    const plans = (plansRaw ?? []).filter((p) => {
+    const filtered = (plansRaw ?? []).filter((p) => {
       const slotOrder = SLOT_ORDER[p.meal_slot as Slot];
       if (p.date === startDate && slotOrder < SLOT_ORDER[startSlot]) return false;
       if (p.date === endDate && slotOrder > SLOT_ORDER[endSlot]) return false;
       return true;
     });
 
-    const recipeIds = [...new Set(plans.map((p) => p.recipe_id!))];
-    if (recipeIds.length === 0) {
-      setBusy(false);
-      router.refresh();
+    setPreviewPlans(
+      filtered.map((p) => ({
+        id: p.id,
+        date: p.date,
+        meal_slot: p.meal_slot as Slot,
+        recipe_id: p.recipe_id!,
+        recipe_name: extractRecipeName(p.recipes),
+        servings: p.servings,
+        included: true,
+      }))
+    );
+    setBusy(false);
+  }
+
+  function togglePreviewPlan(id: string) {
+    setPreviewPlans((prev) =>
+      prev ? prev.map((p) => (p.id === id ? { ...p, included: !p.included } : p)) : prev
+    );
+  }
+
+  // ■O 後半: チェックが入っている献立だけを対象に材料を集計してリストへ追加する
+  async function confirmAggregate() {
+    if (!previewPlans) return;
+    const targetPlans = previewPlans.filter((p) => p.included);
+    if (targetPlans.length === 0) {
+      setPreviewPlans(null);
       return;
     }
 
+    setBusy(true);
+    const id = await ensureListId();
+
+    const recipeIds = [...new Set(targetPlans.map((p) => p.recipe_id))];
     const { data: recipesData } = await supabase
       .from("recipes")
       .select("id, base_servings")
@@ -164,7 +207,7 @@ export default function ShoppingClient({
     // recipe_id -> 何回登場したか(人数調整はservings指定があればそれを使う、なければbase_servings)
     const totals = new Map<string, { amount: number; unit: string | null; type: string }>();
 
-    for (const plan of plans) {
+    for (const plan of targetPlans) {
       const recipe = recipesData?.find((r) => r.id === plan.recipe_id);
       if (!recipe) continue;
       const servings = plan.servings ?? recipe.base_servings;
@@ -202,6 +245,7 @@ export default function ShoppingClient({
       await supabase.from("shopping_items").insert(rows);
     }
     setBusy(false);
+    setPreviewPlans(null);
     router.refresh();
   }
 
@@ -258,13 +302,23 @@ export default function ShoppingClient({
       </div>
 
       <button
-        onClick={aggregateFromRecipes}
+        onClick={loadPreview}
         disabled={busy}
         className="sticker-btn w-full mb-4 bg-yellow border-2.5 border-ink rounded-2xl py-3 font-display font-bold text-sm disabled:opacity-60"
         style={{ boxShadow: "4px 4px 0 var(--ink)" }}
       >
-        この期間の献立から自動集計する
+        対象の献立を確認する
       </button>
+
+      {previewPlans && (
+        <PreviewModal
+          plans={previewPlans}
+          busy={busy}
+          onToggle={togglePreviewPlan}
+          onClose={() => setPreviewPlans(null)}
+          onConfirm={confirmAggregate}
+        />
+      )}
 
       {Object.entries(grouped).map(([catName, items]) => (
         <div key={catName}>
@@ -320,6 +374,78 @@ export default function ShoppingClient({
           style={{ boxShadow: "3px 3px 0 var(--ink)" }}
         >
           追加
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PreviewModal({
+  plans,
+  busy,
+  onToggle,
+  onClose,
+  onConfirm,
+}: {
+  plans: PreviewPlan[];
+  busy: boolean;
+  onToggle: (id: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const includedCount = plans.filter((p) => p.included).length;
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-end lg:items-center justify-center z-50">
+      <div className="sticker w-full max-w-[480px] p-4 rounded-b-none lg:rounded-b-2xl max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-display font-bold text-sm">対象の献立({includedCount}/{plans.length}件)</h2>
+          <button onClick={onClose} className="text-ink/50 text-lg leading-none px-2">
+            ×
+          </button>
+        </div>
+
+        {plans.length === 0 && (
+          <p className="text-sm text-ink/60 py-4 text-center">
+            指定した期間に、レシピの予定が登録されていませんでした。
+          </p>
+        )}
+
+        <div className="flex flex-col gap-1.5 mb-4">
+          {plans.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => onToggle(p.id)}
+              className="sticker-sm p-2.5 px-3 flex items-center gap-2.5 text-left"
+              style={{
+                background: p.included ? "#fff" : "#f3ede2",
+                border: "2px solid var(--ink)",
+              }}
+            >
+              <span
+                className={`w-[20px] h-[20px] rounded-lg border-2 border-ink flex-shrink-0 flex items-center justify-center ${
+                  p.included ? "bg-mint" : "bg-white"
+                }`}
+              >
+                {p.included && <CheckIcon className="w-3 h-3" />}
+              </span>
+              <span className={`text-sm flex-1 ${p.included ? "" : "opacity-40 line-through"}`}>
+                <span className="font-display font-bold text-xs text-ink/50 mr-1.5">
+                  {formatMD(new Date(p.date + "T00:00:00"))} {p.meal_slot}
+                </span>
+                {p.recipe_name}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={onConfirm}
+          disabled={busy || plans.length === 0}
+          className="w-full sticker-btn text-sm font-display font-bold py-2.5 rounded-2xl border-2 border-ink bg-coral disabled:opacity-60"
+          style={{ boxShadow: "3px 3px 0 var(--ink)" }}
+        >
+          {busy ? "追加中..." : "この内容で買い物リストに追加する"}
         </button>
       </div>
     </div>
