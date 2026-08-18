@@ -353,13 +353,11 @@ function PlanEditModal({
   // 新しい料理を追加するための入力欄
   const [newType, setNewType] = useState<ContentType>("recipe");
   const [newRecipeId, setNewRecipeId] = useState(recipes[0]?.id ?? "");
-  const [newEatOutId, setNewEatOutId] = useState(eatOutOptions[0]?.id ?? "");
   const [newFreeText, setNewFreeText] = useState("");
   const [addCounter, setAddCounter] = useState(0);
 
   function addItem() {
     if (newType === "recipe" && !newRecipeId) return;
-    if (newType === "eat_out" && !newEatOutId) return;
     if (newType === "free_text" && !newFreeText.trim()) return;
 
     setItems((prev) => [
@@ -368,7 +366,7 @@ function PlanEditModal({
         key: `new-${addCounter}`,
         content_type: newType,
         recipe_id: newRecipeId,
-        eat_out_option_id: newEatOutId,
+        eat_out_option_id: "",
         free_text_label: newFreeText,
       },
     ]);
@@ -487,7 +485,7 @@ function PlanEditModal({
       <div className="sticker-sm p-3 mb-4" style={{ border: "2px dashed var(--ink)", background: "transparent" }}>
         <div className="text-xs font-display font-bold text-ink/60 mb-2">料理を追加する</div>
         <div className="flex gap-1.5 mb-2">
-          {(["recipe", "eat_out", "free_text"] as ContentType[]).map((t) => (
+          {(["recipe", "free_text"] as ContentType[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -496,7 +494,7 @@ function PlanEditModal({
                 newType === t ? "bg-yellow" : "bg-white"
               }`}
             >
-              {t === "recipe" ? "レシピ" : t === "eat_out" ? "外食" : "自由入力"}
+              {t === "recipe" ? "レシピ" : "自由入力(外食もこちら)"}
             </button>
           ))}
         </div>
@@ -511,21 +509,11 @@ function PlanEditModal({
             ))}
           </select>
         )}
-        {newType === "eat_out" && (
-          <select value={newEatOutId} onChange={(e) => setNewEatOutId(e.target.value)} className="input w-full mb-2">
-            {eatOutOptions.length === 0 && <option value="">外食記録がありません</option>}
-            {eatOutOptions.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
-        )}
         {newType === "free_text" && (
           <input
             value={newFreeText}
             onChange={(e) => setNewFreeText(e.target.value)}
-            placeholder="例: カレー"
+            placeholder="例: カレー / 近所のラーメン屋"
             className="input w-full mb-2"
           />
         )}
