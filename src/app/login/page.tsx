@@ -4,6 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+// ビルド時に事前生成(プリレンダリング)しようとするとSupabaseの環境変数が
+// 参照できずビルドエラーになるため、常に動的にレンダリングするよう明示する。
+export const dynamic = "force-dynamic";
+
 // Supabase Authはメールアドレス形式のIDを必要とするため、
 // ユーザーが入力した「ユーザー名」から内部的にダミーのメールアドレスを組み立てて使う。
 // ユーザー自身はメールアドレスを一切意識しなくてよい。
