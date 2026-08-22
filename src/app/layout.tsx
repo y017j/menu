@@ -6,6 +6,10 @@ import SidebarNav from "@/components/SidebarNav";
 export const metadata: Metadata = {
   title: "ごはんノート",
   description: "自分専用の食事管理・献立・買い物アプリ",
+  appleWebApp: {
+    title: "ごはんノート",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
