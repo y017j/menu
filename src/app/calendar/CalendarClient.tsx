@@ -118,10 +118,13 @@ export default function CalendarClient({
       }
       return [...prev, { id: `temp-${selectedDate}`, date: selectedDate, cook_reluctance: value }];
     });
-    supabase.from("day_settings").upsert(
-      { user_id: userId, date: selectedDate, cook_reluctance: value },
-      { onConflict: "user_id,date" }
-    );
+    supabase
+      .from("day_settings")
+      .upsert(
+        { user_id: userId, date: selectedDate, cook_reluctance: value },
+        { onConflict: "user_id,date" }
+      )
+      .then();
   }
 
   return (

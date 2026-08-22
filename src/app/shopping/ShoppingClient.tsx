@@ -130,7 +130,7 @@ export default function ShoppingClient({
 
   async function deleteItem(item: ItemRow) {
     setItems((prev) => prev.filter((it) => it.id !== item.id));
-    supabase.from("shopping_items").delete().eq("id", item.id);
+    await supabase.from("shopping_items").delete().eq("id", item.id);
   }
 
   async function clearAllItems() {
@@ -156,9 +156,9 @@ export default function ShoppingClient({
       .from("shopping_items")
       .update({ is_checked: next, checked_at: next ? new Date().toISOString() : null })
       .eq("id", item.id)
-      .then(() => {
+      .then(async () => {
         if (next) {
-          supabase.from("shopping_history").insert({
+          await supabase.from("shopping_history").insert({
             user_id: userId,
             item_name: item.name,
             category_id: item.category_id,
