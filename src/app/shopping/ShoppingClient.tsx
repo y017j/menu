@@ -58,6 +58,7 @@ export default function ShoppingClient({
 }) {
   const supabase = createClient();
   const [newItemName, setNewItemName] = useState("");
+  const [newItemCategory, setNewItemCategory] = useState("食材");
   const [busy, setBusy] = useState(false);
   // チェック操作等はサーバー往復を待たず即座に画面へ反映するため、ローカルstateで保持する
   const [items, setItems] = useState<ItemRow[]>(initialItems);
@@ -510,13 +511,24 @@ export default function ShoppingClient({
         <input
           value={newItemName}
           onChange={(e) => setNewItemName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addItem(newItemName)}
+          onKeyDown={(e) => e.key === "Enter" && addItem(newItemName, newItemCategory)}
           placeholder="自由に追加(例: ティッシュ)"
-          className="input flex-1"
+          className="input flex-1 min-w-0"
         />
+        <select
+          value={newItemCategory}
+          onChange={(e) => setNewItemCategory(e.target.value)}
+          className="input w-[92px] text-xs flex-shrink-0"
+        >
+          {categories.map((c) => (
+            <option key={c.id} value={c.name}>
+              {c.name}
+            </option>
+          ))}
+        </select>
         <button
-          onClick={() => addItem(newItemName, "日用品")}
-          className="sticker-btn bg-mint border-2 border-ink rounded-2xl px-4 font-display font-bold text-sm"
+          onClick={() => addItem(newItemName, newItemCategory)}
+          className="sticker-btn bg-mint border-2 border-ink rounded-2xl px-4 font-display font-bold text-sm flex-shrink-0"
           style={{ boxShadow: "3px 3px 0 var(--ink)" }}
         >
           追加
