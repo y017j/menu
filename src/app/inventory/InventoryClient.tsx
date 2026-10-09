@@ -262,8 +262,8 @@ export default function InventoryClient({
                     className="sticker sticker-sm flex flex-col overflow-hidden"
                     style={isLow ? { background: "#FFF3EE", borderColor: "var(--coral)" } : undefined}
                   >
-                    <div className="flex justify-end items-center px-3.5 pt-3">
-                      {item.added_to_shopping_list ? (
+                    <div className="flex justify-end items-center gap-2 px-3.5 pt-3">
+                      {item.added_to_shopping_list && (
                         <span
                           className="text-[10px] font-display font-bold px-2 py-0.5 rounded-2xl border-2 border-ink bg-coral flex items-center gap-1"
                           title="買い物リストに追加済み"
@@ -271,15 +271,14 @@ export default function InventoryClient({
                           <CartCheckIcon className="w-2.5 h-2.5" />
                           追加済み
                         </span>
-                      ) : (
-                        <button
-                          onClick={() => handleRestock(item)}
-                          aria-label={`${item.name}を補充する(+1)`}
-                          className="w-10 h-10 rounded-full border-2 border-ink bg-white flex items-center justify-center flex-shrink-0"
-                        >
-                          <PlusIcon className="w-4 h-4" />
-                        </button>
                       )}
+                      <button
+                        onClick={() => handleRestock(item)}
+                        aria-label={`${item.name}を補充する(+1)`}
+                        className="w-10 h-10 rounded-full border-2 border-ink bg-white flex items-center justify-center flex-shrink-0"
+                      >
+                        <PlusIcon className="w-4 h-4" />
+                      </button>
                     </div>
                     <button
                       onClick={() => handleTap(item)}
