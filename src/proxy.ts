@@ -30,9 +30,10 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login");
-  // アイコン生成ルートは未ログインでもアクセスできる必要がある(iOSのホーム画面追加等が未認証で取得するため)
-  const isIconRoute =
-    request.nextUrl.pathname === "/icon" || request.nextUrl.pathname === "/apple-icon";
+  // アイコン・マニフェストは未ログインでもアクセスできる必要がある
+  // (iOSのホーム画面追加やAndroidのインストール判定が、ログイン情報なしで取得するため)
+  const publicPaths = ["/icon", "/apple-icon", "/pwa-icon", "/manifest.webmanifest"];
+  const isIconRoute = publicPaths.includes(request.nextUrl.pathname);
 
   if (!user && !isAuthPage && !isIconRoute) {
     const url = request.nextUrl.clone();
