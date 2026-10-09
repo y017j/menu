@@ -33,8 +33,8 @@ export default async function EditInventoryItemPage({
     <div>
       <div className="flex items-center gap-3 mb-4">
         <Link
-          href="/inventory"
-          aria-label="在庫一覧に戻る"
+          href="/inventory/manage/items"
+          aria-label="商品一覧に戻る"
           className="sticker-btn w-11 h-11 rounded-full border-2 border-ink bg-white flex items-center justify-center flex-shrink-0"
           style={{ boxShadow: "3px 3px 0 var(--ink)" }}
         >
@@ -47,6 +47,7 @@ export default async function EditInventoryItemPage({
         categories={categories ?? []}
         locations={locations ?? []}
         initialItem={item}
+        returnTo="/inventory/manage/items"
       />
     </div>
   );

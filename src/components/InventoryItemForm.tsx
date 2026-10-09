@@ -30,11 +30,13 @@ export default function InventoryItemForm({
   categories,
   locations,
   initialItem,
+  returnTo = "/inventory",
 }: {
   userId: string;
   categories: CategoryRow[];
   locations: LocationRow[];
   initialItem?: InitialItem;
+  returnTo?: string;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -145,7 +147,7 @@ export default function InventoryItemForm({
     }
 
     setSaving(false);
-    router.push("/inventory");
+    router.push(returnTo);
     router.refresh();
   }
 
@@ -157,7 +159,7 @@ export default function InventoryItemForm({
     }
     setSaving(true);
     await supabase.from("inventory_items").delete().eq("id", initialItem.id);
-    router.push("/inventory");
+    router.push(returnTo);
     router.refresh();
   }
 
@@ -294,7 +296,7 @@ export default function InventoryItemForm({
         )}
         <div className="flex gap-3">
           <button
-            onClick={() => router.push("/inventory")}
+            onClick={() => router.push(returnTo)}
             className="sticker-btn bg-white border-2.5 border-ink rounded-2xl px-6 py-3 font-display font-bold text-sm"
             style={{ boxShadow: "3px 3px 0 var(--ink)" }}
           >

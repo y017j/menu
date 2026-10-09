@@ -48,6 +48,13 @@ export default function ManageMenuClient({ locations }: { locations: LocationRow
           icon={<PlusIcon className="w-5 h-5" />}
         />
         <MenuRow
+          href="/inventory/manage/items"
+          title="商品の編集・削除"
+          desc="登録済みの商品を編集したり、削除したりします"
+          bg="bg-coral"
+          icon={<PencilIcon className="w-4 h-4" />}
+        />
+        <MenuRow
           href="/inventory/categories"
           title="カテゴリを管理"
           desc="食材・調味料などの分類を編集します"
