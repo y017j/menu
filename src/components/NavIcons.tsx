@@ -3,7 +3,7 @@ export const NAV_ITEMS = [
   { href: "/calendar", label: "カレンダー", icon: IconCalendar },
   { href: "/recipes", label: "レシピ", icon: IconBook },
   { href: "/shopping", label: "買い物", icon: IconCart },
-  { href: "/inventory", label: "在庫", icon: IconJar },
+  // 在庫は常設タブレット用の別画面のため、ここには並べない(ホームの小さなリンクから開く)
 ];
 
 export function IconHome({ className, active }: { className?: string; active?: boolean }) {

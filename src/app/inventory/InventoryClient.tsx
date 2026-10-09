@@ -28,6 +28,10 @@ interface LocationRow {
   id: string;
   name: string;
 }
+// 横に並べる最大列数 / 1行あたりのカードの最小の高さ(px)
+const MAX_COLUMNS = 4;
+const CARD_MIN_HEIGHT = 150;
+
 interface ToastState {
   itemId: string;
   itemName: string;
@@ -175,24 +179,29 @@ export default function InventoryClient({
   }
 
   if (deviceLocation === undefined) {
-    return <div />;
+    return <div className="min-h-dvh" />;
   }
 
   if (deviceLocation === null) {
     return (
-      <div className="sticker p-7 max-w-[420px] mx-auto mt-10 text-center flex flex-col items-center gap-4">
-        <JarMascot className="w-10 h-11 text-ink" />
-        <h1 className="font-display font-black text-lg">この端末の表示場所を設定してください</h1>
-        <p className="text-sm text-ink/70">
-          常設タブレットとして使う場合は、置いてある場所(パントリーなど)を最初に1回選んでください。この設定はこの端末だけに保存されます。
-        </p>
-        <Link
-          href="/inventory/manage/location"
-          className="sticker-btn w-full bg-coral border-2.5 border-ink rounded-2xl py-3 font-display font-bold text-sm"
-          style={{ boxShadow: "4px 4px 0 var(--ink)" }}
-        >
-          表示場所を選ぶ
-        </Link>
+      <div className="min-h-dvh flex items-center justify-center px-4">
+        <div className="sticker p-7 max-w-[420px] w-full text-center flex flex-col items-center gap-4">
+          <JarMascot className="w-10 h-11 text-ink" />
+          <h1 className="font-display font-black text-lg">この端末の表示場所を設定してください</h1>
+          <p className="text-sm text-ink/70">
+            常設タブレットとして使う場合は、置いてある場所(パントリーなど)を最初に1回選んでください。この設定はこの端末だけに保存されます。
+          </p>
+          <Link
+            href="/inventory/manage/location"
+            className="sticker-btn w-full bg-coral border-2.5 border-ink rounded-2xl py-3 font-display font-bold text-sm"
+            style={{ boxShadow: "4px 4px 0 var(--ink)" }}
+          >
+            表示場所を選ぶ
+          </Link>
+          <Link href="/" className="text-xs text-ink/50 underline py-2">
+            ごはんノートに戻る
+          </Link>
+        </div>
       </div>
     );
   }
@@ -213,110 +222,161 @@ export default function InventoryClient({
     sections.push({ category: { id: "__none__", name: "未分類" }, items: uncategorized });
   }
 
+  // カードの幅は全カテゴリで同じにそろえる。列数は「いちばん商品が多いカテゴリ」の数(最大4列)。
+  // 列数より多いカテゴリは折り返し、各カテゴリの帯の高さは行数に比例させて、カードの高さもそろえる。
+  const cols = Math.max(1, Math.min(MAX_COLUMNS, ...sections.map((s) => s.items.length)));
+
   return (
-    <div className="relative pb-20">
-      <div className="flex flex-wrap justify-between items-center gap-3.5 mb-6">
-        <div className="flex items-center gap-3">
-          <JarMascot className="w-7 h-8 text-ink flex-shrink-0" />
-          <div>
-            <h1 className="font-display font-black text-xl">{locationName}の在庫</h1>
-            <p className="text-[12.5px] text-ink/60 mt-0.5">
-              取り出したら、カードをタップして1つ減らしてください
-            </p>
-          </div>
+    <div className="flex min-h-dvh">
+      {/* 左のスリムなメニューバー。数字を触る領域を最大にするため、メニューはここだけに集約 */}
+      <nav
+        aria-label="在庫メニュー"
+        className="sticky top-0 h-dvh w-[92px] flex-shrink-0 border-r-[2.5px] border-ink bg-[#FFF3DF] flex flex-col items-center py-5 gap-3.5"
+      >
+        <div className="flex flex-col items-center gap-1.5 text-center px-1">
+          <JarMascot className="w-7 h-8 text-ink" />
+          <span className="font-display font-bold text-[12.5px] leading-tight break-all">{locationName}</span>
         </div>
+        <span className="w-11 h-0.5 bg-[#E4D7C4]" />
         <Link
           href="/inventory/manage"
-          className="sticker-btn bg-white border-2.5 border-ink rounded-2xl px-4 py-2.5 font-display font-bold text-xs flex items-center gap-1.5"
+          aria-label="管理メニューを開く"
+          className="sticker-btn w-[68px] min-h-16 rounded-2xl border-2 border-ink bg-white flex flex-col items-center justify-center gap-1 font-display font-bold text-[11.5px]"
           style={{ boxShadow: "2px 2px 0 var(--ink)" }}
         >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+            <path
+              d="M19.4 13a7.4 7.4 0 0 0 0-2l2-1.5-2-3.4-2.3.6a7.6 7.6 0 0 0-1.7-1l-.3-2.4H9.9l-.3 2.4a7.6 7.6 0 0 0-1.7 1l-2.3-.6-2 3.4L5.6 11a7.4 7.4 0 0 0 0 2l-2 1.5 2 3.4 2.3-.6c.5.42 1.08.76 1.7 1l.3 2.4h4.2l.3-2.4a7.6 7.6 0 0 0 1.7-1l2.3.6 2-3.4-2-1.5Z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+          </svg>
           管理
         </Link>
-      </div>
-
-      {sections.length === 0 && (
-        <div className="sticker p-6 text-center text-sm text-ink/70">
-          {locationName}にはまだ商品が登録されていません。
+        <div className="flex-1" />
+        <Link
+          href="/"
+          aria-label="ごはんノートに戻る"
+          className="w-[68px] min-h-16 rounded-2xl border-2 border-dashed border-ink bg-transparent flex flex-col items-center justify-center gap-1 font-display font-bold text-[10.5px] leading-tight text-center"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5H9v5H5a1 1 0 0 1-1-1v-7.5Z"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+          </svg>
+          ごはん
           <br />
-          「管理」から最初の1品を登録してみましょう。
-        </div>
-      )}
+          ノート
+        </Link>
+      </nav>
 
-      <div className="flex flex-col gap-7">
-        {sections.map(({ category, items: catItems }) => (
-          <section key={category.id} className="flex flex-col gap-3.5">
-            <div className="flex items-center gap-2.5">
-              <span
-                className="w-3 h-3 rounded-full border-2 border-ink flex-shrink-0"
-                style={{ background: category.id === "__none__" ? "#EDE3D0" : categoryColor(category.name) }}
-              />
-              <h2 className="font-display font-bold text-sm">{category.name}</h2>
-              <span className="flex-1 h-[2px] bg-[#E4D7C4]" />
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {catItems.map((item) => {
-                const isLow = item.quantity <= item.min_quantity;
-                return (
-                  <div
-                    key={item.id}
-                    className="sticker sticker-sm flex flex-col overflow-hidden"
-                    style={isLow ? { background: "#FFF3EE", borderColor: "var(--coral)" } : undefined}
-                  >
-                    <div className="flex justify-end items-center gap-2 px-3.5 pt-3">
+      {/* 数字を触るエリア。残りの画面を全部使う */}
+      <main className="flex-1 min-w-0 flex flex-col gap-3.5 pt-5 pb-24 pl-5 pr-6">
+        {sections.length === 0 && (
+          <div className="sticker p-6 text-center text-sm text-ink/70 max-w-[480px] mx-auto mt-10">
+            {locationName}にはまだ商品が登録されていません。
+            <br />
+            左の「管理」から最初の1品を登録してみましょう。
+          </div>
+        )}
+
+        {sections.map(({ category, items: catItems }) => {
+          const rows = Math.ceil(catItems.length / cols);
+          return (
+            <section
+              key={category.id}
+              className="flex flex-col gap-2.5 min-h-0"
+              style={{ flex: `${rows} 1 0`, minHeight: rows * CARD_MIN_HEIGHT + 34 }}
+            >
+              <div className="flex items-center gap-2.5">
+                <span
+                  className="w-3.5 h-3.5 rounded-full border-2 border-ink flex-shrink-0"
+                  style={{ background: category.id === "__none__" ? "#EDE3D0" : categoryColor(category.name) }}
+                />
+                <h2 className="font-display font-bold text-[17px]">{category.name}</h2>
+                <span className="flex-1 h-[2px] bg-[#E4D7C4]" />
+              </div>
+              <div
+                className="flex-1 min-h-0 grid gap-4.5"
+                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "1fr" }}
+              >
+                {catItems.map((item) => {
+                  const isLow = item.quantity <= item.min_quantity;
+                  return (
+                    <div
+                      key={item.id}
+                      className="relative flex flex-col overflow-hidden rounded-3xl border-[2.5px] border-ink bg-white"
+                      style={{
+                        boxShadow: "4px 4px 0 var(--ink)",
+                        ...(isLow ? { background: "#FFF3EE", borderColor: "var(--coral)" } : {}),
+                      }}
+                    >
+                      <button
+                        onClick={() => handleRestock(item)}
+                        aria-label={`${item.name}を補充する(+1)`}
+                        className="absolute top-3 right-3 w-[52px] h-[52px] rounded-full border-2 border-ink bg-white flex items-center justify-center z-10 active:bg-mint-soft"
+                      >
+                        <PlusIcon className="w-5 h-5" />
+                      </button>
                       {item.added_to_shopping_list && (
                         <span
-                          className="text-[10px] font-display font-bold px-2 py-0.5 rounded-2xl border-2 border-ink bg-coral flex items-center gap-1"
+                          className="absolute top-3.5 left-3.5 text-[11px] font-display font-bold px-2.5 py-0.5 rounded-2xl border-2 border-ink bg-coral flex items-center gap-1 z-10"
                           title="買い物リストに追加済み"
                         >
-                          <CartCheckIcon className="w-2.5 h-2.5" />
+                          <CartCheckIcon className="w-3 h-3" />
                           追加済み
                         </span>
                       )}
                       <button
-                        onClick={() => handleRestock(item)}
-                        aria-label={`${item.name}を補充する(+1)`}
-                        className="w-10 h-10 rounded-full border-2 border-ink bg-white flex items-center justify-center flex-shrink-0"
+                        onClick={() => handleTap(item)}
+                        aria-label={`${item.name}を1つ取り出す(タップで1減らす)`}
+                        className="flex-1 w-full flex flex-col items-center justify-center gap-1.5 px-4 pt-6 pb-2 text-center active:bg-[#FFE9DF]"
                       >
-                        <PlusIcon className="w-4 h-4" />
+                        <span className="font-display font-bold" style={{ fontSize: "clamp(17px, 2.4vmin, 24px)" }}>
+                          {item.name}
+                        </span>
+                        <span
+                          className="font-display font-black leading-none"
+                          style={{
+                            fontSize: "clamp(44px, 9vmin, 88px)",
+                            color: isLow ? "#D9512C" : "var(--ink)",
+                          }}
+                        >
+                          {item.quantity}
+                        </span>
+                        <span className={`text-sm ${isLow ? "text-[#8A4632] font-bold" : "text-ink/55"}`}>
+                          {item.unit ?? ""}・最低{item.min_quantity}
+                        </span>
                       </button>
+                      {!item.added_to_shopping_list && (
+                        <button
+                          onClick={() => manualAddToShoppingList(item)}
+                          className="text-[11px] text-ink/40 underline min-h-9"
+                        >
+                          買い物リストに追加する
+                        </button>
+                      )}
                     </div>
-                    <button
-                      onClick={() => handleTap(item)}
-                      aria-label={`${item.name}を1つ取り出す(タップで1減らす)`}
-                      className="w-full flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 px-3 text-center"
-                    >
-                      <span className="font-display font-bold text-[15px]">{item.name}</span>
-                      <span
-                        className="font-display font-black text-4xl leading-none"
-                        style={{ color: isLow ? "#D9512C" : "var(--ink)" }}
-                      >
-                        {item.quantity}
-                      </span>
-                      <span className={`text-[11px] ${isLow ? "text-[#8A4632] font-bold" : "text-ink/50"}`}>
-                        {item.unit ?? ""}・最低{item.min_quantity}
-                        {item.added_to_shopping_list ? "・追加済み" : ""}
-                      </span>
-                    </button>
-                    {!item.added_to_shopping_list && (
-                      <button
-                        onClick={() => manualAddToShoppingList(item)}
-                        className="text-[10.5px] text-ink/40 underline py-1.5"
-                      >
-                        買い物リストに追加する
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </main>
 
       {toast && (
-        <div className="fixed left-1/2 bottom-6 -translate-x-1/2 bg-ink text-cream rounded-2xl px-5 py-3.5 flex items-center gap-4 shadow-lg z-50 whitespace-nowrap">
-          <span className="font-display font-bold text-sm">{toast.itemName}を1つ取り出しました</span>
-          <button onClick={handleUndo} className="font-display font-bold text-sm text-yellow underline">
+        <div
+          className="fixed bottom-6 bg-ink text-cream rounded-full px-6 py-3 flex items-center gap-4 shadow-lg z-50 whitespace-nowrap -translate-x-1/2"
+          style={{ left: "calc(50% + 46px)" }}
+        >
+          <span className="font-display font-bold text-[15px]">{toast.itemName}を1つ取り出しました</span>
+          <button onClick={handleUndo} className="font-display font-bold text-[15px] text-yellow underline min-h-11">
             元に戻す
           </button>
         </div>

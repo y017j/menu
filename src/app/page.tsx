@@ -120,6 +120,14 @@ export default async function HomePage() {
       >
         カレンダーで予定を見る
       </Link>
+
+      <Link
+        href="/inventory"
+        className="mt-3 min-h-11 flex items-center justify-between gap-2 px-1 text-[13px] text-ink/55"
+      >
+        <span className="underline">在庫(タブレット用の画面)を開く</span>
+        <span className="text-lg">›</span>
+      </Link>
     </div>
   );
 }
