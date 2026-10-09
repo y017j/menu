@@ -232,7 +232,16 @@ export default function InventoryClient({
   return (
     <div className={`inv-screen${showPhotos ? " inv-photo-on" : ""}`}>
       <nav className="inv-rail" aria-label="在庫メニュー">
-        <div className="inv-loc">{locationName}</div>
+        <div
+          className="inv-loc"
+          style={
+            Array.from(locationName).length > 7
+              ? { whiteSpace: "normal", wordBreak: "break-all", fontSize: 12 }
+              : { fontSize: Math.min(15, Math.floor(76 / Array.from(locationName).length)) }
+          }
+        >
+          {locationName}
+        </div>
         <div style={{ flex: 1 }} />
         <Link href="/inventory/manage" className="inv-rb" aria-label="管理メニューを開く">
           管理

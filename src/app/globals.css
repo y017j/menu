@@ -129,18 +129,20 @@ body:has(.inv-theme) {
   border-right: 1px solid var(--inv-line);
 }
 .inv-loc {
-  padding: 30px 8px 26px 22px;
+  padding: 30px 8px 26px 14px;
   font-size: 15px;
   font-weight: 500;
   line-height: 1.5;
-  word-break: break-all;
+  white-space: nowrap;
 }
 .inv-rb {
   display: flex;
   align-items: center;
   min-height: 56px;
-  padding-left: 22px;
-  font-size: 13px;
+  padding-left: 14px;
+  white-space: nowrap;
+  letter-spacing: -0.02em;
+  font-size: 12px;
   color: var(--inv-sub);
   border-top: 1px solid var(--inv-line2);
 }
