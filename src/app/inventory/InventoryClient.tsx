@@ -18,6 +18,7 @@ interface ItemRow {
   category_id: string | null;
   location_id: string | null;
   added_to_shopping_list: boolean;
+  photo_url: string | null;
   shopping_categories: { id: string; name: string } | null;
 }
 interface CategoryRow {
@@ -323,37 +324,67 @@ export default function InventoryClient({
                       >
                         <PlusIcon className="w-5 h-5" />
                       </button>
-                      {item.added_to_shopping_list && (
+                      <button
+                        onClick={() => handleTap(item)}
+                        aria-label={`${item.name}を1つ取り出す(タップで1減らす)`}
+                        className="flex-1 min-h-0 w-full flex text-left active:bg-[#FFE9DF]"
+                      >
+                        {/* 左: 写真(なければカテゴリ色+頭文字) */}
                         <span
-                          className="absolute top-3.5 left-3.5 text-[11px] font-display font-bold px-2.5 py-0.5 rounded-2xl border-2 border-ink bg-coral flex items-center gap-1 z-10"
+                          className="w-[38%] max-w-[170px] flex-shrink-0 self-stretch border-r-[2.5px] flex items-center justify-center overflow-hidden"
+                          style={{
+                            borderColor: isLow ? "var(--coral)" : "var(--ink)",
+                            background: item.photo_url
+                              ? "#F3EBDB"
+                              : category.id === "__none__"
+                                ? "#EDE3D0"
+                                : categoryColor(category.name),
+                          }}
+                        >
+                          {item.photo_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span
+                              className="font-display font-black text-ink"
+                              style={{ fontSize: "clamp(32px, 6vmin, 60px)" }}
+                              aria-hidden="true"
+                            >
+                              {Array.from(item.name)[0] ?? ""}
+                            </span>
+                          )}
+                        </span>
+                        {/* 右: 名前・数字・単位 */}
+                        <span className="flex-1 min-w-0 flex flex-col items-start justify-center gap-1.5 pl-4 pr-3 pt-12 pb-3">
+                          <span
+                            className="font-display font-bold leading-tight break-words w-full"
+                            style={{ fontSize: "clamp(16px, 2.2vmin, 22px)" }}
+                          >
+                            {item.name}
+                          </span>
+                          <span
+                            className="font-display font-black leading-none"
+                            style={{
+                              fontSize: "clamp(44px, 9vmin, 84px)",
+                              color: isLow ? "#D9512C" : "var(--ink)",
+                            }}
+                          >
+                            {item.quantity}
+                          </span>
+                          <span className={`text-sm ${isLow ? "text-[#8A4632] font-bold" : "text-ink/55"}`}>
+                            {item.unit ?? ""}・最低{item.min_quantity}
+                          </span>
+                        </span>
+                      </button>
+                      {item.added_to_shopping_list ? (
+                        <span
+                          className="self-start ml-3.5 mb-2.5 text-[11px] font-display font-bold px-2.5 py-0.5 rounded-2xl border-2 border-ink bg-coral flex items-center gap-1"
                           title="買い物リストに追加済み"
                         >
                           <CartCheckIcon className="w-3 h-3" />
                           追加済み
                         </span>
-                      )}
-                      <button
-                        onClick={() => handleTap(item)}
-                        aria-label={`${item.name}を1つ取り出す(タップで1減らす)`}
-                        className="flex-1 w-full flex flex-col items-center justify-center gap-1.5 px-4 pt-6 pb-2 text-center active:bg-[#FFE9DF]"
-                      >
-                        <span className="font-display font-bold" style={{ fontSize: "clamp(17px, 2.4vmin, 24px)" }}>
-                          {item.name}
-                        </span>
-                        <span
-                          className="font-display font-black leading-none"
-                          style={{
-                            fontSize: "clamp(44px, 9vmin, 88px)",
-                            color: isLow ? "#D9512C" : "var(--ink)",
-                          }}
-                        >
-                          {item.quantity}
-                        </span>
-                        <span className={`text-sm ${isLow ? "text-[#8A4632] font-bold" : "text-ink/55"}`}>
-                          {item.unit ?? ""}・最低{item.min_quantity}
-                        </span>
-                      </button>
-                      {!item.added_to_shopping_list && (
+                      ) : (
                         <button
                           onClick={() => manualAddToShoppingList(item)}
                           className="text-[11px] text-ink/40 underline min-h-9"
