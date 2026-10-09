@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CameraIcon, MinusIcon, PlusIcon } from "@/components/Icons";
+import { MinusIcon, PlusIcon } from "@/components/Icons";
 import { ALL_LOCATIONS, getDeviceLocation } from "@/lib/deviceLocation";
 
 interface CategoryRow {
@@ -164,22 +164,15 @@ export default function InventoryItemForm({
   }
 
   return (
-    <div>
-      <div className="sticker p-5 lg:p-7 flex flex-wrap gap-7">
-        <div className="flex flex-col items-center gap-3 flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="w-[180px] h-[180px] rounded-2xl border-2.5 border-dashed border-ink bg-cream flex flex-col items-center justify-center gap-2 overflow-hidden"
-          >
+    <div className="inv-page">
+      <div className="inv-panel" style={{ padding: 22, display: "flex", flexWrap: "wrap", gap: 28 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, flex: "none" }}>
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="inv-photo-box">
             {photoPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoPreview} alt="" className="w-full h-full object-cover" />
+              <img src={photoPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             ) : (
-              <>
-                <CameraIcon className="w-10 h-10 text-ink/60" />
-                <span className="text-xs text-ink/50">写真はまだありません</span>
-              </>
+              <span style={{ fontSize: 12, color: "var(--inv-muted)" }}>写真はまだありません</span>
             )}
           </button>
           <input
@@ -190,25 +183,19 @@ export default function InventoryItemForm({
             onChange={handlePhotoChange}
             className="hidden"
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="sticker-btn bg-yellow border-2 border-ink rounded-2xl px-4 py-2 font-display font-bold text-sm flex items-center gap-1.5"
-            style={{ boxShadow: "3px 3px 0 var(--ink)" }}
-          >
-            <CameraIcon className="w-4 h-4" />
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="inv-btn">
             写真を撮る
           </button>
         </div>
 
-        <div className="flex-1 min-w-[260px] flex flex-col gap-5">
+        <div style={{ flex: 1, minWidth: 260, display: "flex", flexDirection: "column", gap: 20 }}>
           <div>
-            <label className="block font-display font-bold text-sm mb-1.5" htmlFor="inv-name">
+            <label className="inv-label" htmlFor="inv-name">
               商品名
             </label>
             <input
               id="inv-name"
-              className="input w-full"
+              className="inv-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="例: 卵"
@@ -216,16 +203,15 @@ export default function InventoryItemForm({
           </div>
 
           <div>
-            <span className="block font-display font-bold text-sm mb-1.5">カテゴリ</span>
-            <div className="flex gap-2 flex-wrap">
+            <span className="inv-label">カテゴリ</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {categories.map((c) => (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => setCategoryId(c.id)}
-                  className={`text-sm font-display font-bold px-3.5 py-2 rounded-2xl border-2 border-ink ${
-                    categoryId === c.id ? "bg-mint" : "bg-white"
-                  }`}
+                  aria-pressed={categoryId === c.id}
+                  className={`inv-chip${categoryId === c.id ? " on" : ""}`}
                 >
                   {c.name}
                 </button>
@@ -234,80 +220,63 @@ export default function InventoryItemForm({
           </div>
 
           <div>
-            <span className="block font-display font-bold text-sm mb-1.5">場所</span>
-            <div className="flex gap-2 flex-wrap">
+            <span className="inv-label">場所</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {locations.map((l) => (
                 <button
                   key={l.id}
                   type="button"
                   onClick={() => setLocationId(l.id)}
-                  className={`text-sm font-display font-bold px-3.5 py-2 rounded-2xl border-2 border-ink ${
-                    locationId === l.id ? "bg-pink" : "bg-white"
-                  }`}
+                  aria-pressed={locationId === l.id}
+                  className={`inv-chip${locationId === l.id ? " on" : ""}`}
                 >
                   {l.name}
                 </button>
               ))}
             </div>
-            <p className="text-xs text-ink/55 mt-1.5">
+            <p className="inv-row-desc" style={{ marginTop: 8 }}>
               この商品が置いてある場所です。選んだ場所のタブレットにだけ表示されます
             </p>
           </div>
 
-          <div className="max-w-[220px]">
-            <label className="block font-display font-bold text-sm mb-1.5" htmlFor="inv-unit">
+          <div style={{ maxWidth: 220 }}>
+            <label className="inv-label" htmlFor="inv-unit">
               単位
             </label>
             <input
               id="inv-unit"
-              className="input w-full"
+              className="inv-input"
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
               placeholder="例: 個・パック・g"
             />
           </div>
 
-          <div className="flex gap-7 flex-wrap">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 28 }}>
             <Stepper label="現在の在庫数" value={quantity} onChange={setQuantity} />
             <Stepper label="最低在庫数" value={minQuantity} onChange={setMinQuantity} />
           </div>
-          <p className="text-xs text-ink/55 -mt-2 max-w-[420px]">
+          <p className="inv-row-desc" style={{ marginTop: -8, maxWidth: 420 }}>
             在庫がこの数以下になると、自動で買い物リストに追加されます(追加済みの場合は、+ボタンで補充すると追加状態がリセットされます)
           </p>
         </div>
       </div>
 
-      {saveError && <p className="text-sm text-[#c0392b] mt-3">{saveError}</p>}
+      {saveError && <p className="inv-error">{saveError}</p>}
 
-      <div className="flex items-center justify-between flex-wrap gap-3 mt-5">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
         {isEdit ? (
-          <button
-            onClick={handleDelete}
-            disabled={saving}
-            className={`sticker-btn border-2.5 rounded-2xl px-5 py-3 font-display font-bold text-sm disabled:opacity-60 ${
-              confirmDelete ? "bg-[#c0392b] text-white border-ink" : "bg-white text-[#c0392b] border-[#c0392b]"
-            }`}
-            style={{ boxShadow: `3px 3px 0 ${confirmDelete ? "var(--ink)" : "#c0392b"}` }}
-          >
+          <button onClick={handleDelete} disabled={saving} className={`inv-btn danger${confirmDelete ? " armed" : ""}`}>
             {confirmDelete ? "本当に削除する" : "この商品を削除"}
           </button>
         ) : (
           <span />
         )}
-        <div className="flex gap-3">
-          <button
-            onClick={() => router.push(returnTo)}
-            className="sticker-btn bg-white border-2.5 border-ink rounded-2xl px-6 py-3 font-display font-bold text-sm"
-            style={{ boxShadow: "3px 3px 0 var(--ink)" }}
-          >
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => router.push(returnTo)} className="inv-btn">
             キャンセル
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="sticker-btn bg-coral border-2.5 border-ink rounded-2xl px-7 py-3 font-display font-bold text-sm disabled:opacity-60"
-            style={{ boxShadow: "3px 3px 0 var(--ink)" }}
-          >
+          <button onClick={handleSave} disabled={saving} className="inv-btn primary">
             {saving ? "保存中..." : "保存する"}
           </button>
         </div>
@@ -327,22 +296,24 @@ function Stepper({
 }) {
   return (
     <div>
-      <span className="block font-display font-bold text-sm mb-1.5">{label}</span>
-      <div className="flex items-center gap-3">
+      <span className="inv-label">{label}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button
           type="button"
           onClick={() => onChange(Math.max(0, Math.round((value - 1) * 100) / 100))}
           aria-label={`${label}を減らす`}
-          className="w-11 h-11 rounded-full border-2.5 border-ink bg-white flex items-center justify-center flex-shrink-0"
+          className="inv-icon-btn"
         >
           <MinusIcon className="w-4 h-4" />
         </button>
-        <div className="font-display font-black text-2xl min-w-[36px] text-center">{value}</div>
+        <div style={{ fontFamily: "Jost, sans-serif", fontWeight: 300, fontSize: 32, minWidth: 40, textAlign: "center" }}>
+          {value}
+        </div>
         <button
           type="button"
           onClick={() => onChange(Math.round((value + 1) * 100) / 100)}
           aria-label={`${label}を増やす`}
-          className="w-11 h-11 rounded-full border-2.5 border-ink bg-white flex items-center justify-center flex-shrink-0"
+          className="inv-icon-btn"
         >
           <PlusIcon className="w-4 h-4" />
         </button>

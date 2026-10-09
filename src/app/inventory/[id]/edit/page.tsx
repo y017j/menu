@@ -31,16 +31,13 @@ export default async function EditInventoryItemPage({
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-4">
-        <Link
-          href="/inventory/manage/items"
-          aria-label="商品一覧に戻る"
-          className="sticker-btn w-11 h-11 rounded-full border-2 border-ink bg-white flex items-center justify-center flex-shrink-0"
-          style={{ boxShadow: "3px 3px 0 var(--ink)" }}
-        >
-          ←
-        </Link>
-        <h1 className="font-display font-black text-xl">商品を編集</h1>
+      <div className="inv-page">
+        <div className="inv-head">
+          <Link href="/inventory/manage/items" aria-label="商品一覧に戻る" className="inv-back">
+            ←
+          </Link>
+          <h1 className="inv-title">商品を編集</h1>
+        </div>
       </div>
       <InventoryItemForm
         userId={user?.id ?? ""}

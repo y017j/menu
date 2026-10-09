@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CartCheckIcon, JarMascot, PlusIcon } from "@/components/Icons";
-import { categoryColor } from "@/lib/categoryColor";
 import { ALL_LOCATIONS, getDeviceLocation } from "@/lib/deviceLocation";
+import { getShowPhotos } from "@/lib/deviceSettings";
 import { useKioskRuntime } from "@/lib/useKioskRuntime";
 
 interface ItemRow {
@@ -30,8 +29,8 @@ interface LocationRow {
   name: string;
 }
 // 横に並べる最大列数 / 1行あたりのカードの最小の高さ(px)
-const MAX_COLUMNS = 4;
-const CARD_MIN_HEIGHT = 150;
+const MAX_COLUMNS = 5;
+const CARD_MIN_HEIGHT = 130;
 
 interface ToastState {
   itemId: string;
@@ -57,12 +56,14 @@ export default function InventoryClient({
   const [items, setItems] = useState<ItemRow[]>(initialItems);
   // undefined = まだlocalStorageを確認していない(初回レンダー時のちらつき防止)
   const [deviceLocation, setDeviceLocationState] = useState<string | null | undefined>(undefined);
+  const [showPhotos, setShowPhotosState] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageはサーバーでは読めないため、マウント後にクライアント側だけで同期する
     setDeviceLocationState(getDeviceLocation());
+    setShowPhotosState(getShowPhotos());
   }, []);
 
   // 他の端末での変更を取り込むための定期リフレッシュ(router.refresh)後、
@@ -185,21 +186,16 @@ export default function InventoryClient({
 
   if (deviceLocation === null) {
     return (
-      <div className="min-h-dvh flex items-center justify-center px-4">
-        <div className="sticker p-7 max-w-[420px] w-full text-center flex flex-col items-center gap-4">
-          <JarMascot className="w-10 h-11 text-ink" />
-          <h1 className="font-display font-black text-lg">この端末の表示場所を設定してください</h1>
-          <p className="text-sm text-ink/70">
-            常設タブレットとして使う場合は、置いてある場所(パントリーなど)を最初に1回選んでください。この設定はこの端末だけに保存されます。
-          </p>
-          <Link
-            href="/inventory/manage/location"
-            className="sticker-btn w-full bg-coral border-2.5 border-ink rounded-2xl py-3 font-display font-bold text-sm"
-            style={{ boxShadow: "4px 4px 0 var(--ink)" }}
-          >
+      <div className="inv-page" style={{ padding: "96px 24px 0" }}>
+        <h1 className="inv-title">この端末の表示場所を設定してください</h1>
+        <p className="inv-lead">
+          常設タブレットとして使う場合は、置いてある場所(パントリーなど)を最初に1回選んでください。この設定はこの端末だけに保存されます。
+        </p>
+        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+          <Link href="/inventory/manage/location" className="inv-btn primary">
             表示場所を選ぶ
           </Link>
-          <Link href="/" className="text-xs text-ink/50 underline py-2">
+          <Link href="/" className="inv-btn">
             ごはんノートに戻る
           </Link>
         </div>
@@ -223,66 +219,37 @@ export default function InventoryClient({
     sections.push({ category: { id: "__none__", name: "未分類" }, items: uncategorized });
   }
 
-  // カードの幅は全カテゴリで同じにそろえる。列数は「いちばん商品が多いカテゴリ」の数(最大4列)。
-  // 列数より多いカテゴリは折り返し、各カテゴリの帯の高さは行数に比例させて、カードの高さもそろえる。
+  // タイルの幅は全カテゴリで同じ。列数は「いちばん商品が多いカテゴリ」の数(最大 MAX_COLUMNS 列)。
+  // 列数より多いカテゴリは折り返し、各カテゴリの高さは行数に比例させてタイルの高さもそろえる。
   const cols = Math.max(1, Math.min(MAX_COLUMNS, ...sections.map((s) => s.items.length)));
+  const totalRows = Math.max(
+    1,
+    sections.reduce((sum, s) => sum + Math.ceil(s.items.length / cols), 0)
+  );
+  // 数字の大きさ: 画面の高さ(行数)と幅(列数)の両方に収まるように決める
+  const numSize = `clamp(44px, min(calc((100dvh - 40px) / ${totalRows} * 0.46), calc((100vw - 250px) / ${cols} * 0.34), 124px), 124px)`;
 
   return (
-    <div className="flex min-h-dvh">
-      {/* 左のスリムなメニューバー。数字を触る領域を最大にするため、メニューはここだけに集約 */}
-      <nav
-        aria-label="在庫メニュー"
-        className="sticky top-0 h-dvh w-[92px] flex-shrink-0 border-r-[2.5px] border-ink bg-[#FFF3DF] flex flex-col items-center py-5 gap-3.5"
-      >
-        <div className="flex flex-col items-center gap-1.5 text-center px-1">
-          <JarMascot className="w-7 h-8 text-ink" />
-          <span className="font-display font-bold text-[12.5px] leading-tight break-all">{locationName}</span>
-        </div>
-        <span className="w-11 h-0.5 bg-[#E4D7C4]" />
-        <Link
-          href="/inventory/manage"
-          aria-label="管理メニューを開く"
-          className="sticker-btn w-[68px] min-h-16 rounded-2xl border-2 border-ink bg-white flex flex-col items-center justify-center gap-1 font-display font-bold text-[11.5px]"
-          style={{ boxShadow: "2px 2px 0 var(--ink)" }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-            <path
-              d="M19.4 13a7.4 7.4 0 0 0 0-2l2-1.5-2-3.4-2.3.6a7.6 7.6 0 0 0-1.7-1l-.3-2.4H9.9l-.3 2.4a7.6 7.6 0 0 0-1.7 1l-2.3-.6-2 3.4L5.6 11a7.4 7.4 0 0 0 0 2l-2 1.5 2 3.4 2.3-.6c.5.42 1.08.76 1.7 1l.3 2.4h4.2l.3-2.4a7.6 7.6 0 0 0 1.7-1l2.3.6 2-3.4-2-1.5Z"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-            />
-          </svg>
+    <div className={`inv-screen${showPhotos ? " inv-photo-on" : ""}`}>
+      <nav className="inv-rail" aria-label="在庫メニュー">
+        <div className="inv-loc">{locationName}</div>
+        <div style={{ flex: 1 }} />
+        <Link href="/inventory/manage" className="inv-rb" aria-label="管理メニューを開く">
           管理
         </Link>
-        <div className="flex-1" />
-        <Link
-          href="/"
-          aria-label="ごはんノートに戻る"
-          className="w-[68px] min-h-16 rounded-2xl border-2 border-dashed border-ink bg-transparent flex flex-col items-center justify-center gap-1 font-display font-bold text-[10.5px] leading-tight text-center"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5H9v5H5a1 1 0 0 1-1-1v-7.5Z"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinejoin="round"
-            />
-          </svg>
-          ごはん
-          <br />
-          ノート
+        <Link href="/" className="inv-rb" aria-label="ごはんノートに戻る">
+          ごはんノート
         </Link>
       </nav>
 
-      {/* 数字を触るエリア。残りの画面を全部使う */}
-      <main className="flex-1 min-w-0 flex flex-col gap-3.5 pt-5 pb-24 pl-5 pr-6">
+      <main className="inv-board">
         {sections.length === 0 && (
-          <div className="sticker p-6 text-center text-sm text-ink/70 max-w-[480px] mx-auto mt-10">
-            {locationName}にはまだ商品が登録されていません。
-            <br />
-            左の「管理」から最初の1品を登録してみましょう。
+          <div style={{ padding: "60px 0 0 40px" }}>
+            <p className="inv-lead">
+              {locationName}にはまだ商品が登録されていません。
+              <br />
+              左の「管理」から最初の1品を登録してみましょう。
+            </p>
           </div>
         )}
 
@@ -291,107 +258,55 @@ export default function InventoryClient({
           return (
             <section
               key={category.id}
-              className="flex flex-col gap-2.5 min-h-0"
-              style={{ flex: `${rows} 1 0`, minHeight: rows * CARD_MIN_HEIGHT + 34 }}
+              className="inv-shelf"
+              style={{ flex: `${rows} 1 0`, minHeight: rows * CARD_MIN_HEIGHT }}
             >
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="w-3.5 h-3.5 rounded-full border-2 border-ink flex-shrink-0"
-                  style={{ background: category.id === "__none__" ? "#EDE3D0" : categoryColor(category.name) }}
-                />
-                <h2 className="font-display font-bold text-[17px]">{category.name}</h2>
-                <span className="flex-1 h-[2px] bg-[#E4D7C4]" />
-              </div>
-              <div
-                className="flex-1 min-h-0 grid gap-4.5"
-                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridAutoRows: "1fr" }}
-              >
+              <h2>{category.name}</h2>
+              <div className="inv-tiles" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
                 {catItems.map((item) => {
                   const isLow = item.quantity <= item.min_quantity;
                   return (
-                    <div
-                      key={item.id}
-                      className="relative flex flex-col overflow-hidden rounded-3xl border-[2.5px] border-ink bg-white"
-                      style={{
-                        boxShadow: "4px 4px 0 var(--ink)",
-                        ...(isLow ? { background: "#FFF3EE", borderColor: "var(--coral)" } : {}),
-                      }}
-                    >
-                      <button
-                        onClick={() => handleRestock(item)}
-                        aria-label={`${item.name}を補充する(+1)`}
-                        className="absolute top-3 right-3 w-[52px] h-[52px] rounded-full border-2 border-ink bg-white flex items-center justify-center z-10 active:bg-mint-soft"
-                      >
-                        <PlusIcon className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => handleTap(item)}
-                        aria-label={`${item.name}を1つ取り出す(タップで1減らす)`}
-                        className="flex-1 min-h-0 w-full flex text-left active:bg-[#FFE9DF]"
-                      >
-                        {/* 左: 写真(なければカテゴリ色+頭文字) */}
-                        <span
-                          className="w-[38%] max-w-[170px] flex-shrink-0 self-stretch border-r-[2.5px] flex items-center justify-center overflow-hidden"
-                          style={{
-                            borderColor: isLow ? "var(--coral)" : "var(--ink)",
-                            background: item.photo_url
-                              ? "#F3EBDB"
-                              : category.id === "__none__"
-                                ? "#EDE3D0"
-                                : categoryColor(category.name),
-                          }}
-                        >
+                    <div key={item.id} className={`inv-tile${isLow ? " low" : ""}`}>
+                      {showPhotos && (
+                        <span className="inv-ph" aria-hidden="true">
                           {item.photo_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                            <img src={item.photo_url} alt="" />
                           ) : (
-                            <span
-                              className="font-display font-black text-ink"
-                              style={{ fontSize: "clamp(32px, 6vmin, 60px)" }}
-                              aria-hidden="true"
-                            >
-                              {Array.from(item.name)[0] ?? ""}
-                            </span>
+                            Array.from(item.name)[0] ?? ""
                           )}
                         </span>
-                        {/* 右: 名前・数字・単位 */}
-                        <span className="flex-1 min-w-0 flex flex-col items-start justify-center gap-1.5 pl-4 pr-3 pt-12 pb-3">
-                          <span
-                            className="font-display font-bold leading-tight break-words w-full"
-                            style={{ fontSize: "clamp(16px, 2.2vmin, 22px)" }}
-                          >
-                            {item.name}
-                          </span>
-                          <span
-                            className="font-display font-black leading-none"
-                            style={{
-                              fontSize: "clamp(44px, 9vmin, 84px)",
-                              color: isLow ? "#D9512C" : "var(--ink)",
-                            }}
-                          >
+                      )}
+                      <button
+                        className="inv-tap"
+                        onClick={() => handleTap(item)}
+                        aria-label={`${item.name}を1つ取り出す(タップで1減らす)`}
+                      >
+                        <span className="inv-nm">{item.name}</span>
+                        <span className="inv-qty">
+                          <span className="inv-nu" style={{ fontSize: numSize }}>
                             {item.quantity}
                           </span>
-                          <span className={`text-sm ${isLow ? "text-[#8A4632] font-bold" : "text-ink/55"}`}>
-                            {item.unit ?? ""}・最低{item.min_quantity}
-                          </span>
+                          {item.unit && <span className="inv-un">{item.unit}</span>}
                         </span>
                       </button>
+                      <span className="inv-min">最低 {item.min_quantity}</span>
                       {item.added_to_shopping_list ? (
-                        <span
-                          className="self-start ml-3.5 mb-2.5 text-[11px] font-display font-bold px-2.5 py-0.5 rounded-2xl border-2 border-ink bg-coral flex items-center gap-1"
-                          title="買い物リストに追加済み"
-                        >
-                          <CartCheckIcon className="w-3 h-3" />
-                          追加済み
-                        </span>
+                        <span className="inv-tag">追加済み</span>
                       ) : (
-                        <button
-                          onClick={() => manualAddToShoppingList(item)}
-                          className="text-[11px] text-ink/40 underline min-h-9"
-                        >
-                          買い物リストに追加する
+                        <button className="inv-manual" onClick={() => manualAddToShoppingList(item)}>
+                          買い物リストに追加
                         </button>
                       )}
+                      <button
+                        className="inv-plus"
+                        onClick={() => handleRestock(item)}
+                        aria-label={`${item.name}を補充する(+1)`}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        </svg>
+                      </button>
                     </div>
                   );
                 })}
@@ -402,14 +317,9 @@ export default function InventoryClient({
       </main>
 
       {toast && (
-        <div
-          className="fixed bottom-6 bg-ink text-cream rounded-full px-6 py-3 flex items-center gap-4 shadow-lg z-50 whitespace-nowrap -translate-x-1/2"
-          style={{ left: "calc(50% + 46px)" }}
-        >
-          <span className="font-display font-bold text-[15px]">{toast.itemName}を1つ取り出しました</span>
-          <button onClick={handleUndo} className="font-display font-bold text-[15px] text-yellow underline min-h-11">
-            元に戻す
-          </button>
+        <div className="inv-toast" role="status">
+          <span>{toast.itemName}を1つ取り出しました</span>
+          <button onClick={handleUndo}>元に戻す</button>
         </div>
       )}
     </div>

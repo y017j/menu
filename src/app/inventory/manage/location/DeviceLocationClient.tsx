@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon } from "@/components/Icons";
 import { ALL_LOCATIONS, getDeviceLocation, setDeviceLocation } from "@/lib/deviceLocation";
+import { getShowPhotos, setShowPhotos } from "@/lib/deviceSettings";
 
 interface LocationRow {
   id: string;
@@ -13,10 +13,12 @@ interface LocationRow {
 export default function DeviceLocationClient({ locations }: { locations: LocationRow[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
+  const [photos, setPhotos] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorageはサーバーでは読めないため、マウント後にクライアント側だけで同期する
     setSelected(getDeviceLocation());
+    setPhotos(getShowPhotos());
   }, []);
 
   function handleSave() {
@@ -25,54 +27,65 @@ export default function DeviceLocationClient({ locations }: { locations: Locatio
     router.push("/inventory");
   }
 
+  // 写真の表示は切り替えた時点で、この端末に保存される(次に切り替えるまで保持)
+  function handlePhotos(value: boolean) {
+    setPhotos(value);
+    setShowPhotos(value);
+  }
+
   return (
-    <div className="max-w-[480px] mx-auto">
-      <div className="flex items-center gap-3 mb-4">
-        <button
-          onClick={() => router.push("/inventory/manage")}
-          aria-label="管理メニューに戻る"
-          className="sticker-btn w-11 h-11 rounded-full border-2 border-ink bg-white flex items-center justify-center flex-shrink-0"
-          style={{ boxShadow: "3px 3px 0 var(--ink)" }}
-        >
+    <div className="inv-page">
+      <div className="inv-head">
+        <button onClick={() => router.push("/inventory/manage")} aria-label="管理メニューに戻る" className="inv-back">
           ←
         </button>
-        <h1 className="font-display font-black text-lg">この端末の表示場所</h1>
+        <h1 className="inv-title">この端末の設定</h1>
       </div>
-      <p className="text-[13px] text-ink/60 mb-5">
-        この端末の在庫一覧には、選んだ場所の商品だけが表示されます。タブレットを設置した場所に合わせて選んでください。この設定はこの端末のブラウザだけに保存され、他の端末には影響しません。
+      <p className="inv-lead">
+        ここでの設定はこの端末のブラウザだけに保存され、他の端末には影響しません。ブラウザのデータを消去した場合は、もう一度設定してください。
       </p>
 
-      <div className="flex flex-col gap-2.5 mb-6">
+      <h2 className="inv-section-title" style={{ marginTop: 8 }}>
+        写真の表示
+      </h2>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className={`inv-chip${photos ? " on" : ""}`} onClick={() => handlePhotos(true)} aria-pressed={photos}>
+          表示する
+        </button>
+        <button className={`inv-chip${!photos ? " on" : ""}`} onClick={() => handlePhotos(false)} aria-pressed={!photos}>
+          表示しない
+        </button>
+      </div>
+      <p className="inv-lead" style={{ marginTop: 10 }}>
+        在庫一覧のタイルの右側に商品の写真を表示します。写真がない商品は頭文字が表示されます。
+      </p>
+
+      <h2 className="inv-section-title">表示場所</h2>
+      <p className="inv-lead" style={{ marginBottom: 12 }}>
+        在庫一覧には、選んだ場所の商品だけが表示されます。タブレットを置いた場所に合わせて選んでください。
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {locations.map((loc) => (
           <button
             key={loc.id}
+            className={`inv-chip${selected === loc.id ? " on" : ""}`}
             onClick={() => setSelected(loc.id)}
-            className={`sticker sticker-sm text-left px-5 py-4 font-display font-bold text-base flex items-center gap-3 ${
-              selected === loc.id ? "bg-pink" : "bg-white"
-            }`}
+            aria-pressed={selected === loc.id}
           >
-            {selected === loc.id && <CheckIcon className="w-4 h-4 flex-shrink-0" />}
             {loc.name}
           </button>
         ))}
         <button
+          className={`inv-chip${selected === ALL_LOCATIONS ? " on" : ""}`}
           onClick={() => setSelected(ALL_LOCATIONS)}
-          className={`sticker sticker-sm text-left px-5 py-4 font-display font-bold text-base flex items-center gap-3 ${
-            selected === ALL_LOCATIONS ? "bg-mint" : "bg-white"
-          }`}
+          aria-pressed={selected === ALL_LOCATIONS}
         >
-          {selected === ALL_LOCATIONS && <CheckIcon className="w-4 h-4 flex-shrink-0" />}
-          すべての場所(フィルタしない)
+          すべての場所
         </button>
       </div>
 
-      <button
-        onClick={handleSave}
-        disabled={!selected}
-        className="sticker-btn w-full bg-coral border-2.5 border-ink rounded-2xl py-3.5 font-display font-bold text-sm disabled:opacity-50"
-        style={{ boxShadow: "4px 4px 0 var(--ink)" }}
-      >
-        この場所に設定する
+      <button className="inv-btn primary" style={{ marginTop: 24, width: "100%" }} onClick={handleSave} disabled={!selected}>
+        この場所に設定して一覧へ
       </button>
     </div>
   );
