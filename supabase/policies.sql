@@ -79,6 +79,20 @@ CREATE POLICY "via shopping_list" ON shopping_items FOR ALL USING (
   EXISTS (SELECT 1 FROM shopping_lists l WHERE l.id = shopping_items.shopping_list_id AND l.user_id = auth.uid())
 );
 
+ALTER TABLE inventory_locations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own inventory locations" ON inventory_locations FOR ALL USING (
+  user_id = auth.uid()
+) WITH CHECK (
+  user_id = auth.uid()
+);
+
+ALTER TABLE inventory_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own inventory items" ON inventory_items FOR ALL USING (
+  user_id = auth.uid()
+) WITH CHECK (
+  user_id = auth.uid()
+);
+
 -- ============================================================
 -- Storage: meal-photos バケット用ポリシー
 -- バケットは Supabase Dashboard の Storage 画面から先に作成しておくこと(手順書参照)。
@@ -93,3 +107,16 @@ CREATE POLICY "own folder only - insert" ON storage.objects
 
 CREATE POLICY "own folder only - delete" ON storage.objects
   FOR DELETE USING (bucket_id = 'meal-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ============================================================
+-- Storage: inventory-photos バケット用ポリシー(在庫管理の商品写真)
+-- ============================================================
+
+CREATE POLICY "inventory own folder only - select" ON storage.objects
+  FOR SELECT USING (bucket_id = 'inventory-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "inventory own folder only - insert" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'inventory-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "inventory own folder only - delete" ON storage.objects
+  FOR DELETE USING (bucket_id = 'inventory-photos' AND (storage.foldername(name))[1] = auth.uid()::text);

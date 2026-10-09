@@ -36,6 +36,57 @@ export function RedoIcon({ className }: IconProps) {
     </svg>
   );
 }
+export function MinusIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M4 12h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+export function CameraIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" stroke="currentColor" strokeWidth="2" fill="none" strokeLinejoin="round" />
+      <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="2" fill="none" />
+    </svg>
+  );
+}
+export function CartPlusIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M3 4h2l2.4 12.2A2 2 0 009.35 18H18a2 2 0 001.95-1.57L21.5 8H6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="10" cy="21" r="1.4" fill="currentColor" />
+      <circle cx="18" cy="21" r="1.4" fill="currentColor" />
+      <path d="M12 10v4M10 12h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+export function CartCheckIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M3 4h2l2.4 12.2A2 2 0 009.35 18H18a2 2 0 001.95-1.57L21.5 8H6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.5 11.5l1.6 1.6L14 9.5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+export function PencilIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className}>
+      <path d="M4 20l1-4 11-11 3 3-11 11-4 1Z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
+    </svg>
+  );
+}
+export function JarMascot({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 58 64" className={className}>
+      <rect x="6" y="2" width="30" height="10" rx="4" stroke="currentColor" strokeWidth="2.5" fill="none" />
+      <path d="M10 13 L8 56 C8 59.5 11 62 15 62 H27 C31 62 34 59.5 34 56 L32 13 Z" stroke="currentColor" strokeWidth="2.5" fill="var(--yellow)" />
+      <circle cx="16" cy="38" r="2" fill="currentColor" />
+      <circle cx="26" cy="38" r="2" fill="currentColor" />
+      <path d="M15 46 Q21 51 27 46" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+    </svg>
+  );
+}
 export function TrashIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className}>

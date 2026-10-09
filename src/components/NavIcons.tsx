@@ -3,6 +3,7 @@ export const NAV_ITEMS = [
   { href: "/calendar", label: "カレンダー", icon: IconCalendar },
   { href: "/recipes", label: "レシピ", icon: IconBook },
   { href: "/shopping", label: "買い物", icon: IconCart },
+  { href: "/inventory", label: "在庫", icon: IconJar },
 ];
 
 export function IconHome({ className, active }: { className?: string; active?: boolean }) {
@@ -35,6 +36,15 @@ export function IconCart({ className, active }: { className?: string; active?: b
       <path d="M3 4h2l2.4 12.2A2 2 0 009.35 18H18a2 2 0 001.95-1.57L21.5 8H6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx="10" cy="21" r="1.4" fill="currentColor" />
       <circle cx="18" cy="21" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+export function IconJar({ className, active }: { className?: string; active?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} style={{ color: active ? "var(--ink)" : "#c9b9a6" }}>
+      <rect x="7" y="2" width="10" height="4" rx="1.5" stroke="currentColor" strokeWidth="2" fill="none" />
+      <path d="M8 6 L6.5 20.5A1.5 1.5 0 008 22h8a1.5 1.5 0 001.5-1.5L17 6Z" stroke="currentColor" strokeWidth="2" fill="none" strokeLinejoin="round" />
+      <path d="M8.8 14h6.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }

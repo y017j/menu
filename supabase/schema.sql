@@ -268,7 +268,7 @@ CREATE TABLE shopping_items (
   unit                VARCHAR(20),
   category_id         UUID REFERENCES shopping_categories(id) ON DELETE SET NULL,
   is_checked          BOOLEAN NOT NULL DEFAULT false,
-  source              VARCHAR(20) NOT NULL DEFAULT 'manual' CHECK (source IN ('auto_from_recipe','manual')),
+  source              VARCHAR(20) NOT NULL DEFAULT 'manual' CHECK (source IN ('auto_from_recipe','manual','auto_from_inventory')),
   source_recipe_id    UUID REFERENCES recipes(id) ON DELETE SET NULL, -- 自動集計元のレシピ(■O)
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   checked_at          TIMESTAMPTZ
@@ -288,3 +288,35 @@ CREATE TABLE shopping_history (
 CREATE INDEX idx_shopping_history_user_name ON shopping_history(user_id, item_name);
 -- ■U「よく買うもの」は shopping_history を item_name でGROUP BY COUNT(*)して都度算出する想定
 -- (専用の集計テーブルは持たず、購入頻度が低いためクエリで十分)
+
+-- 在庫管理の「場所」(パントリー、クローゼット等)。ユーザーが自由に追加・編集・削除できる。
+-- 常設タブレット運用では、各端末のブラウザ(localStorage)に「この端末の表示場所」を保存し、
+-- その場所の商品だけを一覧に表示する(サーバー側は場所ごとのアクセス制御は行わない)。
+CREATE TABLE inventory_locations (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        VARCHAR(50) NOT NULL,
+  sort_order  INT NOT NULL DEFAULT 0,
+  UNIQUE (user_id, name)
+);
+
+-- 在庫管理(パントリー在庫)。カテゴリは買い物リストと共通の shopping_categories を参照する。
+-- added_to_shopping_list は「最低在庫数を下回って自動的に買い物リストへ追加した」状態のフラグ。
+-- 在庫を補充(+ボタン)した時点でfalseに戻し、次に閾値を下回ったときに再度追加できるようにする
+-- (重複追加を防ぐための状態管理。手動の「買い物リストに追加」ボタンでもtrueにする)。
+CREATE TABLE inventory_items (
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id                UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name                   VARCHAR(100) NOT NULL,
+  category_id            UUID REFERENCES shopping_categories(id) ON DELETE SET NULL,
+  location_id            UUID REFERENCES inventory_locations(id) ON DELETE SET NULL,
+  quantity               NUMERIC(10,2) NOT NULL DEFAULT 0,
+  unit                   VARCHAR(20),
+  min_quantity           NUMERIC(10,2) NOT NULL DEFAULT 0,
+  photo_url              TEXT,
+  added_to_shopping_list BOOLEAN NOT NULL DEFAULT false,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_inventory_items_user ON inventory_items(user_id, category_id);
+CREATE INDEX idx_inventory_items_location ON inventory_items(location_id);

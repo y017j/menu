@@ -81,6 +81,14 @@ export default function LoginPage() {
             sort_order: i,
           }))
         );
+        // デフォルトの在庫管理の場所を投入(自由に追加/編集可能)
+        await supabase.from("inventory_locations").insert(
+          ["パントリー"].map((name, i) => ({
+            user_id: data.user!.id,
+            name,
+            sort_order: i,
+          }))
+        );
       }
     }
     router.push("/");
