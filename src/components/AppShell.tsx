@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import BottomNav from "@/components/BottomNav";
 import SidebarNav from "@/components/SidebarNav";
@@ -8,6 +9,17 @@ import SidebarNav from "@/components/SidebarNav";
 // ごはんノート共通のナビ・幅制限を付けない。在庫の管理系ページ(/inventory/...)はナビなしで通常の幅。
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+
+  // iOSのSafariは viewport の指定だけではピンチ拡大を止められないため、ジェスチャー自体を無効にする
+  useEffect(() => {
+    const prevent = (e: Event) => e.preventDefault();
+    document.addEventListener("gesturestart", prevent);
+    document.addEventListener("gesturechange", prevent);
+    return () => {
+      document.removeEventListener("gesturestart", prevent);
+      document.removeEventListener("gesturechange", prevent);
+    };
+  }, []);
 
   if (pathname === "/inventory") {
     return <>{children}</>;

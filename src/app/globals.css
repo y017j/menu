@@ -63,3 +63,19 @@ body {
   outline: none;
   border-color: var(--coral);
 }
+
+/* iPhone/iPadのSafariは、文字サイズが16px未満の入力欄にフォーカスすると画面が勝手に拡大される。
+   入力欄は16px以上にそろえて、拡大が起きないようにする(iOSのみ。他の端末の見た目は変えない)。 */
+@supports (-webkit-touch-callout: none) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ダブルタップでの拡大を無効にして、タップ操作を素早く反応させる */
+html,
+body {
+  touch-action: manipulation;
+}
